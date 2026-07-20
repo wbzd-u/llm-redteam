@@ -212,6 +212,48 @@ python -m redteam_memory defense regression `
 
 当一个原本应当 block 的案例从 `block` 变为 `allow` 时，报告会标记 `critical_under_block_regression`，但仍要求人工复核和部署侧证据。
 
+### LLM Guard 桥接
+
+本地 `llm-guard` checkout 通过子进程桥接，不会作为主项目依赖导入。当前仓库 README 已标记该项目归档；建议在独立 Python 3.10–3.12 环境安装，并单独管理其模型与重量级依赖：
+
+```powershell
+cd C:\path\to\llm-guard
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
+```
+
+从主项目执行一次离线扫描：
+
+```powershell
+cd C:\Users\www29\ai_redteam_agent
+python -m redteam_memory defense llm-guard `
+  --repo "C:\path\to\llm-guard" `
+  --python "C:\path\to\llm-guard\.venv\Scripts\python.exe" `
+  --input "SAFE_CANARY" `
+  --scanner PromptInjection `
+  --timeout 900
+```
+
+如果同时提供 `--case-id`、`--profile-id`、`--run-id` 和 `--expected`，扫描结果会自动写入 `DefenseObservation`：
+
+```powershell
+python -m redteam_memory defense llm-guard `
+  --repo "C:\path\to\llm-guard" `
+  --python "C:\path\to\llm-guard\.venv\Scripts\python.exe" `
+  --input "SAFE_CANARY" `
+  --case-id "<case-id>" `
+  --profile-id "<profile-id>" `
+  --run-id "llm-guard-0.3.16" `
+  --expected allow `
+  --language en `
+  --carrier text `
+  --verified
+```
+
+当前桥只开放 `PromptInjection`，后续扫描器必须逐个验证构造函数、依赖和输出语义后再加入；扫描器没有拦截不等于目标模型或应用已经被攻破。
+
+`PromptInjection` 首次运行还会从 Hugging Face 缓存一个约 704 MiB 的分类权重。该权重不进入本仓库，也不属于主项目依赖；网络受限时可以先使用桥接、记录和回归功能，待缓存完成后再执行真实分类扫描。
+
 ## PyRIT HTTP 执行
 
 PyRIT 在本项目中是执行引擎：负责发送、接收和编排；自研层负责机制记忆、状态判断和证据归档。
@@ -337,6 +379,7 @@ $env:PYTHONPATH = (Get-Location).Path
 - GraySwan 目前以单次 CLI 执行为主，多轮会话仍需显式传递聊天和父消息 ID。
 - Promptfoo 当前为配置导出，尚未内置 provider 与 CI 执行。
 - 防御感知评测目前由人工或已授权外部评估器提供 allow/block 观察；尚未连接具体防守产品的私有 API。
+- 本地 LLM Guard checkout 已归档，桥接层目前只支持 `PromptInjection`，且需要独立环境和模型依赖。
 - 尚未实现自动机制选择、自动变异、Judge 反馈循环和成功样本最小化。
 - 第三方工具保持独立虚拟环境，通过 JSON、子进程或适配器连接，不共享依赖环境。
 
@@ -357,6 +400,7 @@ redteam_memory/
   models.py                Case / Attempt / Turn / Evidence
   state.py                 状态机与证据最小化
   defense.py               防御档案、覆盖矩阵与回归门禁
+  llm_guard_adapter.py     LLM Guard 独立环境桥接
   runner.py                单次执行与持久化
   targets.py               Replay 与 PyRIT HTTP Target
   grayswan.py              GraySwan JSON/SSE 适配器
@@ -367,6 +411,7 @@ experiments/
   memory_cases.py          Inspect AI 任务入口
 scripts/
   smoke_pyrit_http.py      PyRIT 回环测试
+  llm_guard_bridge.py      LLM Guard JSON 子进程桥
 tests/
   test_memory.py           核心测试
 ```

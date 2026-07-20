@@ -1,0 +1,34 @@
+{
+  "title": "Authorized challenge title",
+  "target": "sandbox-model",
+  "challenge": "Paste the challenge description and goal here.",
+  "authorization_scope": "Authorized CTF sandbox only; no external targets.",
+  "success_criteria": [
+    "A platform-visible completion state is recorded"
+  ],
+  "constraints": [
+    "Maximum 12 turns",
+    "Use only the supplied challenge interface"
+  ],
+  "target_config": {
+    "adapter": "replay",
+    "model": "example-model"
+  },
+  "mechanism": "unclassified",
+  "carrier": "chat",
+  "impact": "unknown",
+  "tags": ["ctf", "authorized"],
+  "notes": "Initial researcher notes.",
+  "turns": [
+    {
+      "role": "user",
+      "content": "A harmless baseline message.",
+      "provenance": "manual"
+    },
+    {
+      "role": "assistant",
+      "content": "Recorded target response.",
+      "provenance": "target"
+    }
+  ]
+}

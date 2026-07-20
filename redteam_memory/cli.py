@@ -10,8 +10,13 @@ from typing import Any
 from .adapters import build_inspect_sample, build_promptfoo_config
 from .defense import coverage_matrix, regression_gate
 from .grayswan import GraySwanTarget
+from .llm_guard_adapter import LLMGuardAdapter, record_llm_guard_observation
 from .markdown_import import parse_break_log
-from .models import Attempt, Case, DefenseObservation, DefenseProfile, Evidence, Turn
+from .models import Attempt, Case, ChallengeIntake, DefenseObservation, DefenseProfile, Evidence, ResearchPlan, Turn
+from .intake import load_intake_file
+from .mechanisms import RELATION_VALUES, import_mechanisms, load_mechanism_file, recommend_mechanisms
+from .planner import build_planner_brief, deterministic_draft, validate_plan_payload
+from .analysis_export import case_markdown, write_attempt_csv
 from .ipi_import import import_ipi_dataset
 from .jailbreaker_adapter import JailbreakerCEAdapter
 from .runner import run_once
@@ -91,6 +96,52 @@ def build_parser() -> argparse.ArgumentParser:
     case_add.add_argument("--tag", action="append", default=[])
     case_add.add_argument("--notes", default="")
     case_sub.add_parser("list").add_argument("--status", default=None)
+
+    intake = sub.add_parser("intake", help="import a structured challenge brief and optional chat transcript")
+    intake_sub = intake.add_subparsers(dest="intake_command", required=True)
+    intake_import = intake_sub.add_parser("import", help="import one Challenge Inbox JSON record")
+    intake_import.add_argument("json_file")
+
+    mechanism = sub.add_parser("mechanism", help="manage reusable mechanism cards and Case links")
+    mechanism_sub = mechanism.add_subparsers(dest="mechanism_command", required=True)
+    mechanism_import = mechanism_sub.add_parser("import", help="import mechanism cards from JSON")
+    mechanism_import.add_argument("json_file")
+    mechanism_sub.add_parser("list")
+    mechanism_show = mechanism_sub.add_parser("show")
+    mechanism_show.add_argument("mechanism_id")
+    mechanism_link = mechanism_sub.add_parser("link", help="link a mechanism card to a Case")
+    mechanism_link.add_argument("--mechanism-id", required=True)
+    mechanism_link.add_argument("--case-id", required=True)
+    mechanism_link.add_argument("--relation", choices=sorted(RELATION_VALUES), required=True)
+    mechanism_link.add_argument("--notes", default="")
+    mechanism_recommend = mechanism_sub.add_parser("recommend", help="recommend relevant cards for a Case")
+    mechanism_recommend.add_argument("--case-id", required=True)
+    mechanism_recommend.add_argument("--limit", type=int, default=5)
+
+    plan = sub.add_parser("plan", help="create, import, and review evidence-linked test plans")
+    plan_sub = plan.add_subparsers(dest="plan_command", required=True)
+    plan_context = plan_sub.add_parser("context", help="export minimum structured context for an external LLM planner")
+    plan_context.add_argument("--case-id", required=True)
+    plan_context.add_argument("--limit", type=int, default=5)
+    plan_draft = plan_sub.add_parser("draft", help="create a deterministic, review-required plan draft")
+    plan_draft.add_argument("--case-id", required=True)
+    plan_import = plan_sub.add_parser("import", help="validate and save a structured planner result")
+    plan_import.add_argument("--case-id", required=True)
+    plan_import.add_argument("--planner", default="external-llm")
+    plan_import.add_argument("--json-file", required=True)
+    plan_list = plan_sub.add_parser("list")
+    plan_list.add_argument("--case-id", required=True)
+    plan_show = plan_sub.add_parser("show")
+    plan_show.add_argument("plan_id")
+
+    analysis = sub.add_parser("analysis", help="export evidence-linked case analysis")
+    analysis_sub = analysis.add_subparsers(dest="analysis_command", required=True)
+    analysis_markdown = analysis_sub.add_parser("markdown")
+    analysis_markdown.add_argument("--case-id", required=True)
+    analysis_markdown.add_argument("--out", required=True)
+    analysis_csv = analysis_sub.add_parser("attempt-csv")
+    analysis_csv.add_argument("--case-id", required=True)
+    analysis_csv.add_argument("--out", required=True)
 
     turn = sub.add_parser("turn", help="record a conversation turn")
     turn_sub = turn.add_subparsers(dest="turn_command", required=True)
@@ -173,6 +224,25 @@ def build_parser() -> argparse.ArgumentParser:
     defense_regression.add_argument("--baseline-run", required=True)
     defense_regression.add_argument("--candidate-run", required=True)
     defense_regression.add_argument("--profile-id", default=None)
+
+    llm_guard = defense_sub.add_parser("llm-guard", help="scan offline through an isolated LLM Guard checkout")
+    llm_guard.add_argument("--repo", required=True)
+    llm_guard.add_argument("--python", dest="python_executable", default=None)
+    llm_guard.add_argument("--scanner", default="PromptInjection", choices=["PromptInjection"])
+    llm_guard.add_argument("--threshold", type=float, default=None)
+    llm_guard.add_argument("--match-type", default=None)
+    llm_guard.add_argument("--use-onnx", action="store_true")
+    llm_guard.add_argument("--timeout", type=float, default=600.0)
+    llm_guard.add_argument("--input")
+    llm_guard.add_argument("--input-file")
+    llm_guard.add_argument("--case-id", default=None)
+    llm_guard.add_argument("--profile-id", default=None)
+    llm_guard.add_argument("--run-id", default=None)
+    llm_guard.add_argument("--expected", dest="expected_disposition", choices=["allow", "block", "unknown"], default=None)
+    llm_guard.add_argument("--language", default="und")
+    llm_guard.add_argument("--carrier", default="text")
+    llm_guard.add_argument("--verified", action="store_true")
+    llm_guard.add_argument("--notes", default="")
 
     run = sub.add_parser("run", help="execute one controlled target interaction")
     run_sub = run.add_subparsers(dest="run_command", required=True)
@@ -294,6 +364,128 @@ def main(argv: list[str] | None = None) -> None:
             else:
                 _json(store.list_cases(args.status))
             return
+        if args.command == "intake":
+            try:
+                record = load_intake_file(args.json_file)
+            except ValueError as exc:
+                raise SystemExit(str(exc)) from exc
+            case = store.save_case(Case(
+                title=record["title"],
+                target=record["target"],
+                challenge=record["challenge"],
+                mechanism=record["mechanism"],
+                carrier=record["carrier"],
+                impact=record["impact"],
+                status=record["status"],
+                tags=record["tags"],
+                notes=record["notes"],
+            ))
+            intake = store.save_challenge_intake(ChallengeIntake(
+                case_id=case.case_id,
+                authorization_scope=record["authorization_scope"],
+                success_criteria=record["success_criteria"],
+                constraints=record["constraints"],
+                target_config=record["target_config"],
+                source=record["source"],
+            ))
+            turns: list[dict[str, Any]] = []
+            for item in record["turns"]:
+                metadata = item.get("metadata", {})
+                if not isinstance(metadata, dict):
+                    raise SystemExit("intake turn metadata must be an object")
+                turns.append(store.add_turn(Turn(
+                    case_id=case.case_id,
+                    role=item["role"],
+                    content=item["content"],
+                    channel=str(item.get("channel", "chat")),
+                    provenance=str(item.get("provenance", "imported")),
+                    observed_effect=str(item.get("observed_effect", "")),
+                    refusal=bool(item.get("refusal", False)),
+                    metadata=metadata,
+                )).to_dict())
+            _json({"case": case.to_dict(), "intake": intake.to_dict(), "turns_imported": len(turns), "turns": turns})
+            return
+        if args.command == "mechanism":
+            if args.mechanism_command == "import":
+                try:
+                    cards = import_mechanisms(store, load_mechanism_file(args.json_file))
+                except ValueError as exc:
+                    raise SystemExit(str(exc)) from exc
+                _json([card.to_dict() for card in cards])
+                return
+            if args.mechanism_command == "list":
+                _json(store.list_mechanism_cards())
+                return
+            if args.mechanism_command == "show":
+                card = store.get_mechanism_card(args.mechanism_id)
+                if card is None:
+                    raise SystemExit(f"unknown mechanism: {args.mechanism_id}")
+                card["case_links"] = store.list_mechanism_case_links(mechanism_id=args.mechanism_id)
+                _json(card)
+                return
+            if args.mechanism_command == "link":
+                try:
+                    _json(store.link_mechanism_case(
+                        args.mechanism_id, args.case_id, relation=args.relation, notes=args.notes,
+                    ))
+                except KeyError as exc:
+                    raise SystemExit(str(exc)) from exc
+                return
+            try:
+                _json(recommend_mechanisms(store, args.case_id, limit=args.limit))
+            except KeyError as exc:
+                raise SystemExit(str(exc)) from exc
+            return
+        if args.command == "plan":
+            try:
+                if args.plan_command == "context":
+                    _json(build_planner_brief(store, args.case_id, limit=args.limit))
+                    return
+                if args.plan_command == "draft":
+                    _json(store.save_research_plan(deterministic_draft(store, args.case_id)).to_dict())
+                    return
+                if args.plan_command == "import":
+                    try:
+                        raw = json.loads(Path(args.json_file).read_text(encoding="utf-8"))
+                    except FileNotFoundError as exc:
+                        raise SystemExit(f"plan file does not exist: {args.json_file}") from exc
+                    except json.JSONDecodeError as exc:
+                        raise SystemExit(f"plan file is not valid JSON: {args.json_file}") from exc
+                    payload = validate_plan_payload(raw)
+                    plan = store.save_research_plan(ResearchPlan(
+                        case_id=args.case_id,
+                        planner=args.planner,
+                        status=payload["status"],
+                        hypotheses=payload["hypotheses"],
+                        steps=payload["steps"],
+                        context=build_planner_brief(store, args.case_id),
+                        notes=payload["notes"],
+                    ))
+                    _json(plan.to_dict())
+                    return
+                if args.plan_command == "list":
+                    _json(store.list_research_plans(args.case_id))
+                    return
+                plan = store.get_research_plan(args.plan_id)
+                if plan is None:
+                    raise SystemExit(f"unknown plan: {args.plan_id}")
+                _json(plan)
+                return
+            except KeyError as exc:
+                raise SystemExit(str(exc)) from exc
+        if args.command == "analysis":
+            bundle = store.get_case(args.case_id)
+            if bundle is None:
+                raise SystemExit(f"unknown case: {args.case_id}")
+            if args.analysis_command == "markdown":
+                destination = Path(args.out)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_text(case_markdown(bundle), encoding="utf-8")
+                _json({"format": "markdown", "path": str(destination), "case_id": args.case_id})
+            else:
+                write_attempt_csv(bundle, args.out)
+                _json({"format": "attempt-csv", "path": str(args.out), "case_id": args.case_id})
+            return
         if args.command == "turn":
             _json(store.add_turn(Turn(
                 case_id=args.case_id,
@@ -377,6 +569,39 @@ def main(argv: list[str] | None = None) -> None:
                     verified=args.verified,
                     notes=args.notes,
                 )).to_dict())
+                return
+            if args.defense_command == "llm-guard":
+                prompt = _input_text(args)
+                if not prompt:
+                    raise SystemExit("defense llm-guard requires --input or --input-file")
+                record_values = [args.case_id, args.profile_id, args.run_id, args.expected_disposition]
+                if any(value is not None for value in record_values) and not all(value is not None for value in record_values):
+                    raise SystemExit("recording an LLM Guard observation requires --case-id, --profile-id, --run-id, and --expected")
+                adapter = LLMGuardAdapter(
+                    repo=args.repo,
+                    python_executable=args.python_executable,
+                    scanner=args.scanner,
+                    threshold=args.threshold,
+                    match_type=args.match_type,
+                    use_onnx=args.use_onnx,
+                    timeout=args.timeout,
+                )
+                result = adapter.scan(prompt)
+                if all(value is not None for value in record_values):
+                    observation = record_llm_guard_observation(
+                        store,
+                        case_id=args.case_id,
+                        profile_id=args.profile_id,
+                        run_id=args.run_id,
+                        expected_disposition=args.expected_disposition,
+                        result=result,
+                        language=args.language,
+                        carrier=args.carrier,
+                        verified=args.verified,
+                        notes=args.notes,
+                    )
+                    result["observation"] = observation.to_dict()
+                _json(result)
                 return
             observations = store.list_defense_observations(
                 profile_id=args.profile_id,

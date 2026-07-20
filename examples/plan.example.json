@@ -1,0 +1,28 @@
+{
+  "status": "draft",
+  "hypotheses": [
+    {
+      "id": "h1",
+      "statement": "The supplied carrier may cross a data/control trust boundary.",
+      "basis": "Mechanism-card match and challenge description.",
+      "priority": "high",
+      "positive_signal": "A documented, externally observable state change occurs under the tested condition.",
+      "negative_signal": "The clean and tested conditions behave equivalently."
+    }
+  ],
+  "steps": [
+    {
+      "id": "s1",
+      "hypothesis_id": "h1",
+      "objective": "Run a clean-versus-test comparison with one controlled variable.",
+      "variables": {
+        "carrier": "document",
+        "session": "fresh"
+      },
+      "expected_signal": "The platform's stated success criterion changes in a recorded way.",
+      "stop_condition": "Stop after this comparison and record the result before varying another condition.",
+      "approval_required": true
+    }
+  ],
+  "notes": "Template only. Review before executing against an authorized target."
+}

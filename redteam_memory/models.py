@@ -34,6 +34,69 @@ class Case:
 
 
 @dataclass
+class ChallengeIntake:
+    """Structured, user-supplied context for an authorized challenge.
+
+    This stays separate from ``Case`` so an imported or historical case can
+    retain its original metadata while its challenge brief is updated.
+    """
+
+    case_id: str
+    authorization_scope: str = ""
+    success_criteria: list[str] = field(default_factory=list)
+    constraints: list[str] = field(default_factory=list)
+    target_config: dict[str, Any] = field(default_factory=dict)
+    source: str = "manual"
+    intake_id: str = field(default_factory=lambda: new_id("intake"))
+    created_at: str = field(default_factory=utc_now)
+    updated_at: str = field(default_factory=utc_now)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class MechanismCard:
+    """A reusable, evidence-linked red-team mechanism observation."""
+
+    name: str
+    category: str
+    summary: str = ""
+    match_terms: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    applicability_signals: list[str] = field(default_factory=list)
+    preconditions: list[str] = field(default_factory=list)
+    negative_signals: list[str] = field(default_factory=list)
+    confidence: str = "hypothesis"
+    notes: str = ""
+    mechanism_id: str = field(default_factory=lambda: new_id("mechanism"))
+    created_at: str = field(default_factory=utc_now)
+    updated_at: str = field(default_factory=utc_now)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ResearchPlan:
+    """A versioned, reviewable test plan proposed by a user or planner."""
+
+    case_id: str
+    planner: str = "deterministic"
+    status: str = "draft"
+    hypotheses: list[dict[str, Any]] = field(default_factory=list)
+    steps: list[dict[str, Any]] = field(default_factory=list)
+    context: dict[str, Any] = field(default_factory=dict)
+    notes: str = ""
+    plan_id: str = field(default_factory=lambda: new_id("plan"))
+    created_at: str = field(default_factory=utc_now)
+    updated_at: str = field(default_factory=utc_now)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class Turn:
     case_id: str
     role: str

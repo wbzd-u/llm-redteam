@@ -1,0 +1,30 @@
+{
+  "mechanisms": [
+    {
+      "mechanism_id": "mechanism-document-context",
+      "name": "文档上下文中的指令与数据边界",
+      "category": "间接提示注入 / 文档载体",
+      "summary": "验证外部文档进入模型上下文后，系统是否仍将其视为数据而不是控制指令。",
+      "match_terms": ["resume", "document", "简历", "文档", "附件", "评分"],
+      "tags": ["indirect-injection", "document-carrier"],
+      "applicability_signals": ["题目要求总结、评分或处理外部文档", "文档内容可能进入模型上下文"],
+      "preconditions": ["存在外部内容到模型上下文的可观察链路"],
+      "negative_signals": ["文档字段被严格结构化解析且与控制指令隔离"],
+      "confidence": "observed",
+      "notes": "先验证信任边界与成功判据；不要将模型叙述本身当作成功证据。"
+    },
+    {
+      "mechanism_id": "mechanism-multiturn-state",
+      "name": "多轮会话状态与角色边界",
+      "category": "多轮上下文与状态变化",
+      "summary": "对需要跨轮次保持身份、规则或任务状态的目标建立对照实验。",
+      "match_terms": ["multi-turn", "conversation", "session", "角色", "会话", "上下文"],
+      "tags": ["multi-turn", "state"],
+      "applicability_signals": ["目标有持续会话或记忆", "题目强调角色、历史或状态"],
+      "preconditions": ["可以重置和对比 clean/polluted 会话"],
+      "negative_signals": ["每轮请求均为无状态且上下文不保留"],
+      "confidence": "hypothesis",
+      "notes": "需要记录会话 ID、父消息 ID、轮次和重置状态。"
+    }
+  ]
+}
