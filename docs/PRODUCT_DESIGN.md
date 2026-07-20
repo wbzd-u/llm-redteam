@@ -303,3 +303,16 @@ python -m redteam_memory campaign replay --campaign-id "<campaign-id>" --inputs-
 ```
 
 GraySwan Campaign 默认干运行，只有 `--execute` 才加载本地 `.headers.json` 文件并发送授权请求。发现经验证的运行时成功证据、达到预算或发生目标错误后，Campaign 会停止并保存原因。
+
+### 跨 Case 科研分析 v0.1
+
+`research` 命令在不导出原始输入或响应的前提下，按目标、载体、语言标签（`lang:xx`）、实验阶段、尝试结果与 Campaign 状态聚合数据，并生成可直接放入实验记录的 CSV、JSON 与 SVG 图表：
+
+```powershell
+python -m redteam_memory research summary
+python -m redteam_memory research case-csv --out artifacts/cases.csv
+python -m redteam_memory research summary-json --out artifacts/research-summary.json
+python -m redteam_memory research chart --metric cases-by-target --out artifacts/cases-by-target.svg
+```
+
+“confirmed”仅计入具有经验证运行时/平台证据的 Case；“reproduced”要求至少两次确认状态的 Campaign，避免把单次观察写成稳定结论。

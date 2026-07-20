@@ -19,6 +19,7 @@ from .planner import build_planner_brief, deterministic_draft, validate_plan_pay
 from .analysis_export import case_markdown, write_attempt_csv
 from .llm_provider import OpenAICompatiblePlanner, ProviderError
 from .campaign import create_campaign, load_campaign_inputs, run_campaign
+from .research import CHART_METRICS, research_summary, write_case_csv, write_summary_json, write_summary_svg
 from .ipi_import import import_ipi_dataset
 from .jailbreaker_adapter import JailbreakerCEAdapter
 from .runner import run_once
@@ -186,6 +187,17 @@ def build_parser() -> argparse.ArgumentParser:
     analysis_csv = analysis_sub.add_parser("attempt-csv")
     analysis_csv.add_argument("--case-id", required=True)
     analysis_csv.add_argument("--out", required=True)
+
+    research = sub.add_parser("research", help="summarize and export cross-Case research data")
+    research_sub = research.add_subparsers(dest="research_command", required=True)
+    research_sub.add_parser("summary")
+    research_csv = research_sub.add_parser("case-csv")
+    research_csv.add_argument("--out", required=True)
+    research_json = research_sub.add_parser("summary-json")
+    research_json.add_argument("--out", required=True)
+    research_chart = research_sub.add_parser("chart")
+    research_chart.add_argument("--metric", choices=sorted(CHART_METRICS), required=True)
+    research_chart.add_argument("--out", required=True)
 
     turn = sub.add_parser("turn", help="record a conversation turn")
     turn_sub = turn.add_subparsers(dest="turn_command", required=True)
@@ -597,6 +609,19 @@ def main(argv: list[str] | None = None) -> None:
             else:
                 write_attempt_csv(bundle, args.out)
                 _json({"format": "attempt-csv", "path": str(args.out), "case_id": args.case_id})
+            return
+        if args.command == "research":
+            if args.research_command == "summary":
+                _json(research_summary(store))
+            elif args.research_command == "case-csv":
+                write_case_csv(store, args.out)
+                _json({"format": "case-csv", "path": str(args.out)})
+            elif args.research_command == "summary-json":
+                write_summary_json(store, args.out)
+                _json({"format": "summary-json", "path": str(args.out)})
+            else:
+                write_summary_svg(store, metric=args.metric, path=args.out)
+                _json({"format": "svg", "metric": args.metric, "path": str(args.out)})
             return
         if args.command == "turn":
             _json(store.add_turn(Turn(

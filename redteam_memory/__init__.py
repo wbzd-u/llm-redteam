@@ -7,6 +7,7 @@ from .planner import build_planner_brief, deterministic_draft, validate_plan_pay
 from .analysis_export import case_markdown, write_attempt_csv
 from .llm_provider import OpenAICompatiblePlanner, ProviderError
 from .campaign import create_campaign, load_campaign_inputs, run_campaign
+from .research import research_summary, write_case_csv, write_summary_json, write_summary_svg
 from .defense import coverage_matrix, observation_verdict, regression_gate
 from .llm_guard_adapter import LLMGuardAdapter, record_llm_guard_observation
 from .inspect_integration import load_inspect_samples, task_from_memory
@@ -63,6 +64,7 @@ __all__ = [
     "normalize_intake_record",
     "recommend_next",
     "record_llm_guard_observation",
+    "research_summary",
     "recommend_mechanisms",
     "regression_gate",
     "run_once",
@@ -71,4 +73,7 @@ __all__ = [
     "import_mechanisms",
     "validate_plan_payload",
     "write_attempt_csv",
+    "write_case_csv",
+    "write_summary_json",
+    "write_summary_svg",
 ]
