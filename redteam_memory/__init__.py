@@ -8,6 +8,7 @@ from .analysis_export import case_markdown, write_attempt_csv
 from .llm_provider import OpenAICompatiblePlanner, ProviderError
 from .campaign import create_campaign, load_campaign_inputs, run_campaign
 from .research import research_summary, write_case_csv, write_summary_json, write_summary_svg
+from .web_api import create_app
 from .defense import coverage_matrix, observation_verdict, regression_gate
 from .llm_guard_adapter import LLMGuardAdapter, record_llm_guard_observation
 from .inspect_integration import load_inspect_samples, task_from_memory
@@ -25,6 +26,7 @@ __all__ = [
     "Case",
     "Campaign",
     "case_markdown",
+    "create_app",
     "ChallengeIntake",
     "DefenseObservation",
     "DefenseProfile",

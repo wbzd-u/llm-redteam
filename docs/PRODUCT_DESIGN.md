@@ -316,3 +316,9 @@ python -m redteam_memory research chart --metric cases-by-target --out artifacts
 ```
 
 “confirmed”仅计入具有经验证运行时/平台证据的 Case；“reproduced”要求至少两次确认状态的 Campaign，避免把单次观察写成稳定结论。
+
+### 本地工作台 UI v0.1
+
+UI 采用成熟的 Material UI 管理后台组件模式，而非从零实现视觉系统。前端位于 [`dashboard/`](../dashboard)，通过本地只读 FastAPI 访问现有 SQLite 数据：Overview、Case Workbench、Evidence/Plans/Campaigns 标签页与 Research Analytics。启动方法见 [`dashboard/README.md`](../dashboard/README.md)。
+
+第一版不提供登录、云部署、Cookie 管理或目标执行按钮；所有高影响操作仍保留在可审计的 CLI 中，等批准流与目标权限模型稳定后再接入 UI。

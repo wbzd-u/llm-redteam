@@ -8,3 +8,9 @@ inspect_logs_smoke/
 .pytest_cache/
 secrets/
 *.headers.json
+dashboard/node_modules/
+dashboard/dist/
+*.egg-info/
+dashboard/*.tsbuildinfo
+dashboard/vite.config.js
+dashboard/vite.config.d.ts

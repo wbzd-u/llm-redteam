@@ -199,6 +199,10 @@ def build_parser() -> argparse.ArgumentParser:
     research_chart.add_argument("--metric", choices=sorted(CHART_METRICS), required=True)
     research_chart.add_argument("--out", required=True)
 
+    serve = sub.add_parser("serve", help="start the local read-only dashboard API")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8787)
+
     turn = sub.add_parser("turn", help="record a conversation turn")
     turn_sub = turn.add_subparsers(dest="turn_command", required=True)
     turn_add = turn_sub.add_parser("add")
@@ -622,6 +626,14 @@ def main(argv: list[str] | None = None) -> None:
             else:
                 write_summary_svg(store, metric=args.metric, path=args.out)
                 _json({"format": "svg", "metric": args.metric, "path": str(args.out)})
+            return
+        if args.command == "serve":
+            try:
+                import uvicorn
+                from .web_api import create_app
+            except ImportError as exc:
+                raise SystemExit("Dashboard dependencies are missing. Install with: pip install -e .[dashboard]") from exc
+            uvicorn.run(create_app(args.db), host=args.host, port=args.port)
             return
         if args.command == "turn":
             _json(store.add_turn(Turn(
