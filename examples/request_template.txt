@@ -1,0 +1,5 @@
+POST https://example.invalid/v1/chat HTTP/1.1
+Host: example.invalid
+Content-Type: application/json
+
+{"messages":[{"role":"user","content":"{PROMPT}"}]}
