@@ -39,6 +39,14 @@ def case_markdown(bundle: dict[str, Any]) -> str:
         lines.append(f"- `{plan['plan_id']}` — {plan['planner']} / {plan['status']} / {len(plan['steps'])} step(s)")
     if not bundle.get("plans"):
         lines.append("- None")
+    lines.extend(["", "## Campaigns", ""])
+    for campaign in bundle.get("campaigns", []):
+        lines.append(
+            f"- `{campaign['campaign_id']}` — {campaign['target_kind']} / {campaign['status']} / "
+            f"{campaign['executed_turns']} turn(s): {campaign['stop_reason']}"
+        )
+    if not bundle.get("campaigns"):
+        lines.append("- None")
     return "\n".join(lines) + "\n"
 
 

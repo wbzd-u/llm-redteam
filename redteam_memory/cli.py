@@ -18,6 +18,7 @@ from .mechanisms import RELATION_VALUES, import_mechanisms, load_mechanism_file,
 from .planner import build_planner_brief, deterministic_draft, validate_plan_payload
 from .analysis_export import case_markdown, write_attempt_csv
 from .llm_provider import OpenAICompatiblePlanner, ProviderError
+from .campaign import create_campaign, load_campaign_inputs, run_campaign
 from .ipi_import import import_ipi_dataset
 from .jailbreaker_adapter import JailbreakerCEAdapter
 from .runner import run_once
@@ -145,6 +146,37 @@ def build_parser() -> argparse.ArgumentParser:
     plan_list.add_argument("--case-id", required=True)
     plan_show = plan_sub.add_parser("show")
     plan_show.add_argument("plan_id")
+    plan_approve = plan_sub.add_parser("approve", help="mark a reviewed plan as approved for Campaign execution")
+    plan_approve.add_argument("plan_id")
+
+    campaign = sub.add_parser("campaign", help="run approved plan steps within explicit execution budgets")
+    campaign_sub = campaign.add_subparsers(dest="campaign_command", required=True)
+    campaign_create = campaign_sub.add_parser("create")
+    campaign_create.add_argument("--plan-id", required=True)
+    campaign_create.add_argument("--target-kind", choices=["replay", "grayswan"], required=True)
+    campaign_create.add_argument("--max-turns", type=int, default=3)
+    campaign_create.add_argument("--max-seconds", type=float, default=120.0)
+    campaign_create.add_argument("--max-cost", type=float, default=None)
+    campaign_create.add_argument("--conversation-id", default="")
+    campaign_list = campaign_sub.add_parser("list")
+    campaign_list.add_argument("--case-id", required=True)
+    campaign_replay = campaign_sub.add_parser("replay", help="run supplied approved inputs through an offline Replay target")
+    campaign_replay.add_argument("--campaign-id", required=True)
+    campaign_replay.add_argument("--inputs-file", required=True)
+    campaign_replay.add_argument("--response", default="controlled response")
+    campaign_replay.add_argument("--response-file", default=None)
+    campaign_grayswan = campaign_sub.add_parser("grayswan", help="run supplied approved inputs through a GraySwan challenge")
+    campaign_grayswan.add_argument("--campaign-id", required=True)
+    campaign_grayswan.add_argument("--inputs-file", required=True)
+    campaign_grayswan.add_argument("--model", required=True)
+    campaign_grayswan.add_argument("--association-id", required=True)
+    campaign_grayswan.add_argument("--behavior-id", required=True)
+    campaign_grayswan.add_argument("--challenge-id", required=True)
+    campaign_grayswan.add_argument("--headers-file", required=True)
+    campaign_grayswan.add_argument("--chat-id", default=None)
+    campaign_grayswan.add_argument("--parent-id", default=None)
+    campaign_grayswan.add_argument("--timeout", type=float, default=45.0)
+    campaign_grayswan.add_argument("--execute", action="store_true")
 
     analysis = sub.add_parser("analysis", help="export evidence-linked case analysis")
     analysis_sub = analysis.add_subparsers(dest="analysis_command", required=True)
@@ -501,12 +533,57 @@ def main(argv: list[str] | None = None) -> None:
                 if args.plan_command == "list":
                     _json(store.list_research_plans(args.case_id))
                     return
+                if args.plan_command == "approve":
+                    _json(store.set_research_plan_status(args.plan_id, "approved"))
+                    return
                 plan = store.get_research_plan(args.plan_id)
                 if plan is None:
                     raise SystemExit(f"unknown plan: {args.plan_id}")
                 _json(plan)
                 return
             except (KeyError, ProviderError) as exc:
+                raise SystemExit(str(exc)) from exc
+        if args.command == "campaign":
+            try:
+                if args.campaign_command == "create":
+                    _json(create_campaign(
+                        store, plan_id=args.plan_id, target_kind=args.target_kind,
+                        max_turns=args.max_turns, max_seconds=args.max_seconds,
+                        max_cost=args.max_cost, conversation_id=args.conversation_id,
+                    ).to_dict())
+                    return
+                if args.campaign_command == "list":
+                    _json(store.list_campaigns(args.case_id))
+                    return
+                inputs = load_campaign_inputs(args.inputs_file)
+                if args.campaign_command == "replay":
+                    response = Path(args.response_file).read_text(encoding="utf-8") if args.response_file else args.response
+                    _json(asyncio.run(run_campaign(
+                        store, campaign_id=args.campaign_id, target=ReplayTarget(response), inputs=inputs,
+                    )))
+                    return
+                campaign_record = store.get_campaign(args.campaign_id)
+                if campaign_record is None:
+                    raise KeyError(f"unknown campaign: {args.campaign_id}")
+                if campaign_record["target_kind"] != "grayswan":
+                    raise ValueError("campaign target_kind does not match grayswan")
+                if not args.execute:
+                    _json({
+                        "dry_run": True, "campaign_id": args.campaign_id,
+                        "inputs": len(inputs), "headers_loaded": False,
+                    })
+                    return
+                headers = _load_headers_file(args.headers_file)
+                target = GraySwanTarget(
+                    model=args.model, association_id=args.association_id, behavior_id=args.behavior_id,
+                    challenge_id=args.challenge_id, headers=headers, chat_id=args.chat_id,
+                    parent_id=args.parent_id, timeout=args.timeout,
+                )
+                _json(asyncio.run(run_campaign(
+                    store, campaign_id=args.campaign_id, target=target, inputs=inputs,
+                )))
+                return
+            except (KeyError, ValueError) as exc:
                 raise SystemExit(str(exc)) from exc
         if args.command == "analysis":
             bundle = store.get_case(args.case_id)

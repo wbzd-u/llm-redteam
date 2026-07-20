@@ -1,11 +1,12 @@
 """Evidence-first memory primitives for authorized LLM red-team work."""
 
-from .models import Attempt, Case, ChallengeIntake, DefenseObservation, DefenseProfile, Evidence, MechanismCard, ResearchPlan, Turn
+from .models import Attempt, Campaign, Case, ChallengeIntake, DefenseObservation, DefenseProfile, Evidence, MechanismCard, ResearchPlan, Turn
 from .intake import load_intake_file, normalize_intake_record
 from .mechanisms import import_mechanisms, load_mechanism_file, normalize_mechanism_record, recommend_mechanisms
 from .planner import build_planner_brief, deterministic_draft, validate_plan_payload
 from .analysis_export import case_markdown, write_attempt_csv
 from .llm_provider import OpenAICompatiblePlanner, ProviderError
+from .campaign import create_campaign, load_campaign_inputs, run_campaign
 from .defense import coverage_matrix, observation_verdict, regression_gate
 from .llm_guard_adapter import LLMGuardAdapter, record_llm_guard_observation
 from .inspect_integration import load_inspect_samples, task_from_memory
@@ -21,6 +22,7 @@ from .grayswan import GraySwanTarget, parse_grayswan_stream
 __all__ = [
     "Attempt",
     "Case",
+    "Campaign",
     "case_markdown",
     "ChallengeIntake",
     "DefenseObservation",
@@ -41,9 +43,11 @@ __all__ = [
     "Turn",
     "derive_stage",
     "coverage_matrix",
+    "create_campaign",
     "build_planner_brief",
     "deterministic_draft",
     "load_inspect_samples",
+    "load_campaign_inputs",
     "load_intake_file",
     "load_mechanism_file",
     "import_ipi_dataset",
@@ -62,6 +66,7 @@ __all__ = [
     "recommend_mechanisms",
     "regression_gate",
     "run_once",
+    "run_campaign",
     "task_from_memory",
     "import_mechanisms",
     "validate_plan_payload",

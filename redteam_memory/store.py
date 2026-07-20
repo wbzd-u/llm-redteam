@@ -8,6 +8,7 @@ from typing import Any, Iterable
 from .models import (
     Attempt,
     Case,
+    Campaign,
     ChallengeIntake,
     DefenseObservation,
     DefenseProfile,
@@ -125,6 +126,26 @@ CREATE TABLE IF NOT EXISTS research_plans (
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_research_plans_case ON research_plans(case_id);
+CREATE TABLE IF NOT EXISTS campaigns (
+    campaign_id TEXT PRIMARY KEY,
+    case_id TEXT NOT NULL REFERENCES cases(case_id),
+    plan_id TEXT NOT NULL REFERENCES research_plans(plan_id),
+    target_kind TEXT NOT NULL,
+    max_turns INTEGER NOT NULL,
+    max_seconds REAL NOT NULL,
+    max_cost REAL,
+    status TEXT NOT NULL,
+    executed_turns INTEGER NOT NULL,
+    observed_cost REAL NOT NULL,
+    conversation_id TEXT NOT NULL,
+    stop_reason TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    completed_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_campaigns_case ON campaigns(case_id);
+CREATE INDEX IF NOT EXISTS idx_campaigns_plan ON campaigns(plan_id);
 CREATE TABLE IF NOT EXISTS defense_profiles (
     profile_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -440,6 +461,63 @@ class MemoryStore:
         ).fetchall()
         return [self._decode_research_plan(row) for row in rows]
 
+    def set_research_plan_status(self, plan_id: str, status: str) -> dict[str, Any]:
+        if status not in {"draft", "approved", "superseded"}:
+            raise ValueError("plan status must be draft, approved, or superseded")
+        cursor = self._db.execute(
+            "UPDATE research_plans SET status=?, updated_at=? WHERE plan_id=?",
+            (status, utc_now(), plan_id),
+        )
+        if cursor.rowcount == 0:
+            raise KeyError(f"unknown plan: {plan_id}")
+        self._db.commit()
+        plan = self.get_research_plan(plan_id)
+        assert plan is not None
+        return plan
+
+    def save_campaign(self, campaign: Campaign) -> Campaign:
+        self._require_case(campaign.case_id)
+        plan = self.get_research_plan(campaign.plan_id)
+        if plan is None:
+            raise KeyError(f"unknown plan: {campaign.plan_id}")
+        if plan["case_id"] != campaign.case_id:
+            raise ValueError("campaign Case must match the linked plan Case")
+        campaign.updated_at = utc_now()
+        self._db.execute(
+            """INSERT INTO campaigns
+            (campaign_id,case_id,plan_id,target_kind,max_turns,max_seconds,max_cost,status,
+             executed_turns,observed_cost,conversation_id,stop_reason,created_at,started_at,
+             completed_at,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(campaign_id) DO UPDATE SET
+              target_kind=excluded.target_kind, max_turns=excluded.max_turns,
+              max_seconds=excluded.max_seconds, max_cost=excluded.max_cost,
+              status=excluded.status, executed_turns=excluded.executed_turns,
+              observed_cost=excluded.observed_cost, conversation_id=excluded.conversation_id,
+              stop_reason=excluded.stop_reason, started_at=excluded.started_at,
+              completed_at=excluded.completed_at, updated_at=excluded.updated_at""",
+            (
+                campaign.campaign_id, campaign.case_id, campaign.plan_id, campaign.target_kind,
+                campaign.max_turns, campaign.max_seconds, campaign.max_cost, campaign.status,
+                campaign.executed_turns, campaign.observed_cost, campaign.conversation_id,
+                campaign.stop_reason, campaign.created_at, campaign.started_at,
+                campaign.completed_at, campaign.updated_at,
+            ),
+        )
+        self._db.commit()
+        return campaign
+
+    def get_campaign(self, campaign_id: str) -> dict[str, Any] | None:
+        row = self._db.execute("SELECT * FROM campaigns WHERE campaign_id=?", (campaign_id,)).fetchone()
+        return dict(row) if row is not None else None
+
+    def list_campaigns(self, case_id: str) -> list[dict[str, Any]]:
+        self._require_case(case_id)
+        rows = self._db.execute(
+            "SELECT * FROM campaigns WHERE case_id=? ORDER BY created_at DESC", (case_id,)
+        ).fetchall()
+        return [dict(row) for row in rows]
+
     def save_defense_profile(self, profile: DefenseProfile) -> DefenseProfile:
         profile.updated_at = utc_now()
         self._db.execute(
@@ -624,6 +702,7 @@ class MemoryStore:
         result["intake"] = self.get_challenge_intake(case_id)
         result["mechanism_links"] = self.list_mechanism_case_links(case_id=case_id)
         result["plans"] = self.list_research_plans(case_id)
+        result["campaigns"] = self.list_campaigns(case_id)
         return result
 
     @staticmethod

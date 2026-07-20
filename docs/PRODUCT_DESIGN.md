@@ -291,3 +291,15 @@ python -m redteam_memory plan generate --case-id "<case-id>" `
 ```
 
 端点和模型由调用者明确提供；密钥不会写入数据库、输出或 Git。返回内容会经过计划 schema 校验，失败时不会创建计划记录。
+
+### Campaign Runner v0.1
+
+Campaign 只执行已批准计划的显式输入文件，模板见 [`examples/campaign-inputs.example.json`](../examples/campaign-inputs.example.json)。它不会把抽象步骤自动扩展为无限请求。支持离线 Replay 与明确授权的 GraySwan 适配器，且每次运行都受轮数、时长和可观察成本预算控制：
+
+```powershell
+python -m redteam_memory plan approve "<plan-id>"
+python -m redteam_memory campaign create --plan-id "<plan-id>" --target-kind replay --max-turns 3 --max-seconds 120
+python -m redteam_memory campaign replay --campaign-id "<campaign-id>" --inputs-file examples/campaign-inputs.example.json
+```
+
+GraySwan Campaign 默认干运行，只有 `--execute` 才加载本地 `.headers.json` 文件并发送授权请求。发现经验证的运行时成功证据、达到预算或发生目标错误后，Campaign 会停止并保存原因。

@@ -97,6 +97,31 @@ class ResearchPlan:
 
 
 @dataclass
+class Campaign:
+    """One budgeted execution of an approved research plan."""
+
+    case_id: str
+    plan_id: str
+    target_kind: str
+    max_turns: int = 1
+    max_seconds: float = 60.0
+    max_cost: float | None = None
+    status: str = "pending"
+    executed_turns: int = 0
+    observed_cost: float = 0.0
+    conversation_id: str = ""
+    stop_reason: str = ""
+    campaign_id: str = field(default_factory=lambda: new_id("campaign"))
+    created_at: str = field(default_factory=utc_now)
+    started_at: str = ""
+    completed_at: str = ""
+    updated_at: str = field(default_factory=utc_now)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class Turn:
     case_id: str
     role: str
