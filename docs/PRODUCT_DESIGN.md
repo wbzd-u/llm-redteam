@@ -278,3 +278,16 @@ python -m redteam_memory analysis attempt-csv --case-id "<case-id>" --out artifa
 ```
 
 计划默认是 `draft`，每个步骤均要求人工批准；该层不自动把计划发送给目标。自动 Campaign 将在具备明确预算、暂停点和平台成功验证器后再加入。
+
+若使用本地或云端的 OpenAI-compatible 模型端点，可直接生成计划。命令默认只干运行，不读取密钥；只有显式添加 `--execute` 后，才从指定环境变量（默认 `OPENAI_API_KEY`）读取凭据并发出请求：
+
+```powershell
+python -m redteam_memory plan generate --case-id "<case-id>" `
+  --endpoint "http://localhost:8000/v1/chat/completions" --model "your-model"
+
+$env:OPENAI_API_KEY = "<local-session-key>"
+python -m redteam_memory plan generate --case-id "<case-id>" `
+  --endpoint "https://provider.example/v1/chat/completions" --model "your-model" --execute
+```
+
+端点和模型由调用者明确提供；密钥不会写入数据库、输出或 Git。返回内容会经过计划 schema 校验，失败时不会创建计划记录。

@@ -82,8 +82,8 @@ def validate_plan_payload(payload: dict[str, Any]) -> dict[str, Any]:
     for item in steps:
         if not isinstance(item, dict) or not REQUIRED_STEP_FIELDS.issubset(item):
             raise ValueError("each step must contain the required schema fields")
-        if not isinstance(item["approval_required"], bool):
-            raise ValueError("step approval_required must be boolean")
+        if item["approval_required"] is not True:
+            raise ValueError("each plan step must require explicit approval")
         if not isinstance(item["variables"], dict):
             raise ValueError("step variables must be an object")
         for key in REQUIRED_STEP_FIELDS - {"approval_required", "variables"}:

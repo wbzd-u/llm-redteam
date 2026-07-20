@@ -49,6 +49,14 @@ def test_plan_validation_and_analysis_exports(tmp_path):
         }],
     }
     assert validate_plan_payload(payload)["status"] == "draft"
+    payload["steps"][0]["approval_required"] = False
+    try:
+        validate_plan_payload(payload)
+    except ValueError as exc:
+        assert "approval" in str(exc)
+    else:
+        raise AssertionError("unapproved plan step must fail")
+    payload["steps"][0]["approval_required"] = True
     with MemoryStore(tmp_path / "memory.sqlite3") as store:
         case = store.save_case(Case(title="Export case", target="sandbox"))
         store.add_attempt(Attempt(case_id=case.case_id, mechanism="baseline", input_text="canary", outcome="unknown"))

@@ -17,6 +17,7 @@ from .intake import load_intake_file
 from .mechanisms import RELATION_VALUES, import_mechanisms, load_mechanism_file, recommend_mechanisms
 from .planner import build_planner_brief, deterministic_draft, validate_plan_payload
 from .analysis_export import case_markdown, write_attempt_csv
+from .llm_provider import OpenAICompatiblePlanner, ProviderError
 from .ipi_import import import_ipi_dataset
 from .jailbreaker_adapter import JailbreakerCEAdapter
 from .runner import run_once
@@ -125,6 +126,17 @@ def build_parser() -> argparse.ArgumentParser:
     plan_context.add_argument("--limit", type=int, default=5)
     plan_draft = plan_sub.add_parser("draft", help="create a deterministic, review-required plan draft")
     plan_draft.add_argument("--case-id", required=True)
+    plan_generate = plan_sub.add_parser("generate", help="generate and save a plan through an explicit LLM endpoint")
+    plan_generate.add_argument("--case-id", required=True)
+    plan_generate.add_argument("--endpoint", required=True, help="OpenAI-compatible chat-completions endpoint")
+    plan_generate.add_argument("--model", required=True)
+    plan_generate.add_argument("--api-key-env", default="OPENAI_API_KEY")
+    plan_generate.add_argument("--timeout", type=float, default=60.0)
+    plan_generate.add_argument("--limit", type=int, default=5)
+    plan_generate.add_argument(
+        "--execute", action="store_true",
+        help="required to make a network request; otherwise prints a safe dry-run",
+    )
     plan_import = plan_sub.add_parser("import", help="validate and save a structured planner result")
     plan_import.add_argument("--case-id", required=True)
     plan_import.add_argument("--planner", default="external-llm")
@@ -444,6 +456,29 @@ def main(argv: list[str] | None = None) -> None:
                 if args.plan_command == "draft":
                     _json(store.save_research_plan(deterministic_draft(store, args.case_id)).to_dict())
                     return
+                if args.plan_command == "generate":
+                    brief = build_planner_brief(store, args.case_id, limit=args.limit)
+                    provider = OpenAICompatiblePlanner(
+                        endpoint=args.endpoint,
+                        model=args.model,
+                        api_key_env=args.api_key_env,
+                        timeout=args.timeout,
+                    )
+                    if not args.execute:
+                        _json(provider.dry_run(brief))
+                        return
+                    payload = validate_plan_payload(provider.generate(brief))
+                    plan = store.save_research_plan(ResearchPlan(
+                        case_id=args.case_id,
+                        planner=f"openai-compatible:{args.model}",
+                        status=payload["status"],
+                        hypotheses=payload["hypotheses"],
+                        steps=payload["steps"],
+                        context=brief,
+                        notes=payload["notes"],
+                    ))
+                    _json(plan.to_dict())
+                    return
                 if args.plan_command == "import":
                     try:
                         raw = json.loads(Path(args.json_file).read_text(encoding="utf-8"))
@@ -471,7 +506,7 @@ def main(argv: list[str] | None = None) -> None:
                     raise SystemExit(f"unknown plan: {args.plan_id}")
                 _json(plan)
                 return
-            except KeyError as exc:
+            except (KeyError, ProviderError) as exc:
                 raise SystemExit(str(exc)) from exc
         if args.command == "analysis":
             bundle = store.get_case(args.case_id)

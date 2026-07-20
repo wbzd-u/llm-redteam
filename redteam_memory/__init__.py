@@ -5,6 +5,7 @@ from .intake import load_intake_file, normalize_intake_record
 from .mechanisms import import_mechanisms, load_mechanism_file, normalize_mechanism_record, recommend_mechanisms
 from .planner import build_planner_brief, deterministic_draft, validate_plan_payload
 from .analysis_export import case_markdown, write_attempt_csv
+from .llm_provider import OpenAICompatiblePlanner, ProviderError
 from .defense import coverage_matrix, observation_verdict, regression_gate
 from .llm_guard_adapter import LLMGuardAdapter, record_llm_guard_observation
 from .inspect_integration import load_inspect_samples, task_from_memory
@@ -29,6 +30,8 @@ __all__ = [
     "GraySwanTarget",
     "MemoryStore",
     "MechanismCard",
+    "OpenAICompatiblePlanner",
+    "ProviderError",
     "ResearchPlan",
     "NextAction",
     "PyRITHTTPTarget",
