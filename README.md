@@ -58,6 +58,7 @@
 | PyRIT | HTTP 目标执行与消息编排 | 可用，可选依赖 |
 | Inspect AI | 从已记录案例构建可复现实验 | 可用，可选依赖 |
 | Promptfoo | 导出回归测试配置 | 可用，导出级 |
+| 防御感知评测 | 防御档案、差异观察、覆盖矩阵与回归门禁 | 可用，人工观察驱动 |
 | IPI Arena | 导入间接提示注入种子 | 可用 |
 | Jailbreaker-CE | 离线发现并生成技术种子 | 可用 |
 | GraySwan | 授权关卡的 JSON/SSE 单轮执行 | 实验性 |
@@ -153,6 +154,63 @@ python -m venv .venv
 ```
 
 只有明确的正向运行时字段或外部状态变化才应确认影响。拒绝、失败和无变化同样应该记录，因为它们可以帮助识别防御边界并避免重复测试。
+
+## 防御感知评测
+
+防御感知评测层用于把**公开文档、已授权配置和实际观察**转为可比较数据。它不读取私有服务内部规则，不生成规避变体，也不将“检测器未拦截”自动认定为漏洞。
+
+它包含三类记录：
+
+| 记录 | 作用 |
+| --- | --- |
+| `DefenseProfile` | 防御名称、版本、公开来源、声明范围、假设与已知限制 |
+| `DefenseObservation` | 某条已授权案例在一个 run 中的期望 allow/block 与实际 allow/block |
+| 回归报告 | 比较两个 run，识别覆盖变化、过度拦截和潜在漏放回归 |
+
+创建一个防御档案：
+
+```powershell
+python -m redteam_memory defense profile add `
+  --name "Example policy classifier" `
+  --version "1.0" `
+  --kind classifier `
+  --source "public system card" `
+  --scope "text input" `
+  --assumption "English coverage is documented" `
+  --limitation "Multilingual coverage must be measured"
+```
+
+记录一项人工确认的观察。`expected` 表示该授权测试按你的政策应当 allow 还是 block；`observed` 表示防御器实际决定：
+
+```powershell
+python -m redteam_memory defense observe add `
+  --case-id "<case-id>" `
+  --profile-id "<profile-id>" `
+  --run-id "model-2026-07" `
+  --expected allow `
+  --observed block `
+  --language en `
+  --carrier text `
+  --verified `
+  --notes "Authorized false-positive check"
+```
+
+生成按语言、载体和期望决策分组的覆盖矩阵：
+
+```powershell
+python -m redteam_memory defense matrix --profile-id "<profile-id>"
+```
+
+比较模型或防御版本前后的回归：
+
+```powershell
+python -m redteam_memory defense regression `
+  --profile-id "<profile-id>" `
+  --baseline-run "model-2026-06" `
+  --candidate-run "model-2026-07"
+```
+
+当一个原本应当 block 的案例从 `block` 变为 `allow` 时，报告会标记 `critical_under_block_regression`，但仍要求人工复核和部署侧证据。
 
 ## PyRIT HTTP 执行
 
@@ -278,6 +336,7 @@ $env:PYTHONPATH = (Get-Location).Path
 
 - GraySwan 目前以单次 CLI 执行为主，多轮会话仍需显式传递聊天和父消息 ID。
 - Promptfoo 当前为配置导出，尚未内置 provider 与 CI 执行。
+- 防御感知评测目前由人工或已授权外部评估器提供 allow/block 观察；尚未连接具体防守产品的私有 API。
 - 尚未实现自动机制选择、自动变异、Judge 反馈循环和成功样本最小化。
 - 第三方工具保持独立虚拟环境，通过 JSON、子进程或适配器连接，不共享依赖环境。
 
@@ -297,6 +356,7 @@ redteam_memory/
   store.py                 SQLite 存储
   models.py                Case / Attempt / Turn / Evidence
   state.py                 状态机与证据最小化
+  defense.py               防御档案、覆盖矩阵与回归门禁
   runner.py                单次执行与持久化
   targets.py               Replay 与 PyRIT HTTP Target
   grayswan.py              GraySwan JSON/SSE 适配器

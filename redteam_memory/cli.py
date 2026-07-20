@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from .adapters import build_inspect_sample, build_promptfoo_config
+from .defense import coverage_matrix, regression_gate
 from .grayswan import GraySwanTarget
 from .markdown_import import parse_break_log
-from .models import Attempt, Case, Evidence, Turn
+from .models import Attempt, Case, DefenseObservation, DefenseProfile, Evidence, Turn
 from .ipi_import import import_ipi_dataset
 from .jailbreaker_adapter import JailbreakerCEAdapter
 from .runner import run_once
@@ -135,6 +136,43 @@ def build_parser() -> argparse.ArgumentParser:
 
     compact = sub.add_parser("compact", help="export a redacted evidence-minimal case view")
     compact.add_argument("case_id")
+
+    defense = sub.add_parser("defense", help="record and compare defensive-control observations")
+    defense_sub = defense.add_subparsers(dest="defense_command", required=True)
+    defense_profile = defense_sub.add_parser("profile", help="manage public defense profiles")
+    defense_profile_sub = defense_profile.add_subparsers(dest="profile_command", required=True)
+    defense_profile_add = defense_profile_sub.add_parser("add")
+    defense_profile_add.add_argument("--name", required=True)
+    defense_profile_add.add_argument("--version", default="")
+    defense_profile_add.add_argument("--kind", default="other")
+    defense_profile_add.add_argument("--source", default="")
+    defense_profile_add.add_argument("--scope", action="append", default=[])
+    defense_profile_add.add_argument("--assumption", action="append", default=[])
+    defense_profile_add.add_argument("--limitation", action="append", default=[])
+    defense_profile_add.add_argument("--notes", default="")
+    defense_profile_sub.add_parser("list")
+
+    defense_observe = defense_sub.add_parser("observe", help="record an authorized defense decision")
+    defense_observe_sub = defense_observe.add_subparsers(dest="observe_command", required=True)
+    defense_observe_add = defense_observe_sub.add_parser("add")
+    defense_observe_add.add_argument("--case-id", required=True)
+    defense_observe_add.add_argument("--profile-id", required=True)
+    defense_observe_add.add_argument("--run-id", required=True)
+    defense_observe_add.add_argument("--expected", dest="expected_disposition", choices=["allow", "block", "unknown"], required=True)
+    defense_observe_add.add_argument("--observed", dest="observed_disposition", choices=["allow", "block", "unknown"], required=True)
+    defense_observe_add.add_argument("--language", default="und")
+    defense_observe_add.add_argument("--carrier", default="text")
+    defense_observe_add.add_argument("--latency-ms", type=float, default=None)
+    defense_observe_add.add_argument("--verified", action="store_true")
+    defense_observe_add.add_argument("--notes", default="")
+
+    defense_matrix = defense_sub.add_parser("matrix", help="aggregate coverage and disagreement observations")
+    defense_matrix.add_argument("--profile-id", default=None)
+    defense_matrix.add_argument("--run-id", default=None)
+    defense_regression = defense_sub.add_parser("regression", help="compare two observed defense runs")
+    defense_regression.add_argument("--baseline-run", required=True)
+    defense_regression.add_argument("--candidate-run", required=True)
+    defense_regression.add_argument("--profile-id", default=None)
 
     run = sub.add_parser("run", help="execute one controlled target interaction")
     run_sub = run.add_subparsers(dest="run_command", required=True)
@@ -309,6 +347,51 @@ def main(argv: list[str] | None = None) -> None:
             if bundle is None:
                 raise SystemExit(f"unknown case: {args.case_id}")
             _json(minimize_bundle(bundle))
+            return
+        if args.command == "defense":
+            if args.defense_command == "profile":
+                if args.profile_command == "add":
+                    _json(store.save_defense_profile(DefenseProfile(
+                        name=args.name,
+                        version=args.version,
+                        kind=args.kind,
+                        source=args.source,
+                        scopes=args.scope,
+                        assumptions=args.assumption,
+                        limitations=args.limitation,
+                        notes=args.notes,
+                    )).to_dict())
+                else:
+                    _json(store.list_defense_profiles())
+                return
+            if args.defense_command == "observe":
+                _json(store.add_defense_observation(DefenseObservation(
+                    case_id=args.case_id,
+                    profile_id=args.profile_id,
+                    run_id=args.run_id,
+                    expected_disposition=args.expected_disposition,
+                    observed_disposition=args.observed_disposition,
+                    language=args.language,
+                    carrier=args.carrier,
+                    latency_ms=args.latency_ms,
+                    verified=args.verified,
+                    notes=args.notes,
+                )).to_dict())
+                return
+            observations = store.list_defense_observations(
+                profile_id=args.profile_id,
+                run_id=getattr(args, "run_id", None),
+            )
+            if args.defense_command == "matrix":
+                _json(coverage_matrix(observations))
+            else:
+                baseline = store.list_defense_observations(
+                    profile_id=args.profile_id, run_id=args.baseline_run
+                )
+                candidate = store.list_defense_observations(
+                    profile_id=args.profile_id, run_id=args.candidate_run
+                )
+                _json(regression_gate(baseline, candidate))
             return
         if args.command == "run":
             if args.run_command == "replay":

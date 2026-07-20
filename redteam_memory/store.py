@@ -5,7 +5,16 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
 
-from .models import Attempt, Case, Evidence, Turn, new_id, utc_now
+from .models import (
+    Attempt,
+    Case,
+    DefenseObservation,
+    DefenseProfile,
+    Evidence,
+    Turn,
+    new_id,
+    utc_now,
+)
 
 
 SCHEMA = """
@@ -63,6 +72,37 @@ CREATE INDEX IF NOT EXISTS idx_cases_mechanism ON cases(mechanism);
 CREATE INDEX IF NOT EXISTS idx_turns_case ON turns(case_id);
 CREATE INDEX IF NOT EXISTS idx_evidence_case ON evidence(case_id);
 CREATE INDEX IF NOT EXISTS idx_attempts_case ON attempts(case_id);
+CREATE TABLE IF NOT EXISTS defense_profiles (
+    profile_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    version TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    source TEXT NOT NULL,
+    scopes_json TEXT NOT NULL,
+    assumptions_json TEXT NOT NULL,
+    limitations_json TEXT NOT NULL,
+    notes TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS defense_observations (
+    observation_id TEXT PRIMARY KEY,
+    case_id TEXT NOT NULL REFERENCES cases(case_id),
+    profile_id TEXT NOT NULL REFERENCES defense_profiles(profile_id),
+    run_id TEXT NOT NULL,
+    expected_disposition TEXT NOT NULL,
+    observed_disposition TEXT NOT NULL,
+    language TEXT NOT NULL,
+    carrier TEXT NOT NULL,
+    latency_ms REAL,
+    verified INTEGER NOT NULL,
+    notes TEXT NOT NULL,
+    metadata_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_defense_observations_profile ON defense_observations(profile_id);
+CREATE INDEX IF NOT EXISTS idx_defense_observations_run ON defense_observations(run_id);
+CREATE INDEX IF NOT EXISTS idx_defense_observations_case ON defense_observations(case_id);
 """
 
 
@@ -184,6 +224,78 @@ class MemoryStore:
         )
         self._db.commit()
         return attempt
+
+    def save_defense_profile(self, profile: DefenseProfile) -> DefenseProfile:
+        profile.updated_at = utc_now()
+        self._db.execute(
+            """INSERT INTO defense_profiles
+            (profile_id,name,version,kind,source,scopes_json,assumptions_json,
+             limitations_json,notes,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(profile_id) DO UPDATE SET
+              name=excluded.name, version=excluded.version, kind=excluded.kind,
+              source=excluded.source, scopes_json=excluded.scopes_json,
+              assumptions_json=excluded.assumptions_json,
+              limitations_json=excluded.limitations_json, notes=excluded.notes,
+              updated_at=excluded.updated_at""",
+            (
+                profile.profile_id, profile.name, profile.version, profile.kind, profile.source,
+                json.dumps(profile.scopes), json.dumps(profile.assumptions),
+                json.dumps(profile.limitations), profile.notes, profile.created_at, profile.updated_at,
+            ),
+        )
+        self._db.commit()
+        return profile
+
+    def get_defense_profile(self, profile_id: str) -> dict[str, Any] | None:
+        row = self._db.execute(
+            "SELECT * FROM defense_profiles WHERE profile_id=?", (profile_id,)
+        ).fetchone()
+        return self._decode_defense_profile(row) if row is not None else None
+
+    def list_defense_profiles(self) -> list[dict[str, Any]]:
+        rows = self._db.execute(
+            "SELECT * FROM defense_profiles ORDER BY updated_at DESC"
+        ).fetchall()
+        return [self._decode_defense_profile(row) for row in rows]
+
+    def add_defense_observation(self, observation: DefenseObservation) -> DefenseObservation:
+        self._require_case(observation.case_id)
+        if self.get_defense_profile(observation.profile_id) is None:
+            raise KeyError(f"unknown defense profile: {observation.profile_id}")
+        self._db.execute(
+            """INSERT INTO defense_observations
+            (observation_id,case_id,profile_id,run_id,expected_disposition,
+             observed_disposition,language,carrier,latency_ms,verified,notes,
+             metadata_json,created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                observation.observation_id, observation.case_id, observation.profile_id,
+                observation.run_id, observation.expected_disposition,
+                observation.observed_disposition, observation.language, observation.carrier,
+                observation.latency_ms, int(observation.verified), observation.notes,
+                json.dumps(observation.metadata, ensure_ascii=True), observation.created_at,
+            ),
+        )
+        self._db.commit()
+        return observation
+
+    def list_defense_observations(
+        self, *, profile_id: str | None = None, run_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        values: list[str] = []
+        if profile_id:
+            clauses.append("profile_id=?")
+            values.append(profile_id)
+        if run_id:
+            clauses.append("run_id=?")
+            values.append(run_id)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self._db.execute(
+            f"SELECT * FROM defense_observations{where} ORDER BY rowid", values
+        ).fetchall()
+        return [self._decode_defense_observation(row) for row in rows]
 
     def has_attempt(self, attempt_id: str) -> bool:
         row = self._db.execute(
@@ -314,4 +426,19 @@ class MemoryStore:
     def _decode_attempt(row: sqlite3.Row) -> dict[str, Any]:
         result = dict(row)
         result["first_refusal"] = bool(result["first_refusal"])
+        return result
+
+    @staticmethod
+    def _decode_defense_profile(row: sqlite3.Row) -> dict[str, Any]:
+        result = dict(row)
+        result["scopes"] = json.loads(result.pop("scopes_json"))
+        result["assumptions"] = json.loads(result.pop("assumptions_json"))
+        result["limitations"] = json.loads(result.pop("limitations_json"))
+        return result
+
+    @staticmethod
+    def _decode_defense_observation(row: sqlite3.Row) -> dict[str, Any]:
+        result = dict(row)
+        result["verified"] = bool(result["verified"])
+        result["metadata"] = json.loads(result.pop("metadata_json"))
         return result
