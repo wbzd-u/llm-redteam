@@ -55,6 +55,38 @@ export interface Overview {
   recent_cases: CaseRow[];
 }
 
+export interface MechanismResearchRow {
+  mechanism_id: string;
+  name: string;
+  category: string;
+  summary: string;
+  confidence: string;
+  tags: string[];
+  case_count: number;
+  confirmed_cases: number;
+  negative_cases: number;
+  attempt_count: number;
+  verified_evidence_count: number;
+  relations: Counts;
+  outcomes: Counts;
+  applicability_signals: string[];
+  negative_signals: string[];
+  preconditions: string[];
+}
+
+export interface PaperPacket {
+  summary: ResearchSummary;
+  mechanism_matrix: MechanismResearchRow[];
+  data_dictionary: Array<{ field: string; meaning: string; unit: string }>;
+  readiness: {
+    total_cases: number;
+    field_coverage: Record<string, { filled: number; total: number; rate: number }>;
+    gaps: string[];
+  };
+  methods_draft: string;
+  markdown: string;
+}
+
 export interface CaseDetail extends CaseRow {
   challenge: string;
   notes: string;

@@ -1,4 +1,4 @@
-import type { CaseDetail, CaseRow, Overview, ResearchSummary } from "./types";
+import type { CaseDetail, CaseRow, Overview, PaperPacket, ResearchSummary } from "./types";
 
 const baseUrl = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8787";
 const sourceQuery = (source: string) => source === "all" ? "" : `?source=${encodeURIComponent(source)}`;
@@ -14,4 +14,5 @@ export const api = {
   cases: (source = "user-kb") => get<CaseRow[]>(`/api/cases${sourceQuery(source)}`),
   caseDetail: (caseId: string) => get<CaseDetail>(`/api/cases/${encodeURIComponent(caseId)}`),
   research: (source = "user-kb") => get<ResearchSummary>(`/api/research/summary${sourceQuery(source)}`),
+  paperPacket: (source = "user-kb") => get<PaperPacket>(`/api/research/paper-packet${sourceQuery(source)}`),
 };

@@ -365,6 +365,23 @@ $env:PYTHONPATH = (Get-Location).Path
 
 该任务故意不提供通用“是否攻破”评分器。不同部署的真实影响需要由对应平台评分、工具状态或业务状态证明。
 
+## 机制研究与论文数据包
+
+[`examples/mechanism-taxonomy.zh-CN.json`](examples/mechanism-taxonomy.zh-CN.json) 提供中文机制术语表，覆盖外部上下文信任边界、多轮会话状态、规则优先级、语义校验绑定、跨语言安全对齐、RAG 证据链、Agent 权限边界和多模态载体等研究维度。导入后，可把历史 Case 以 `confirmed`、`observed` 或 `negative` 的关系关联到机制卡：
+
+```powershell
+python -m redteam_memory mechanism import examples/mechanism-taxonomy.zh-CN.json
+python -m redteam_memory mechanism link --mechanism-id <机制ID> --case-id <案例ID> --relation observed
+```
+
+生成论文准备数据包：
+
+```powershell
+python -m redteam_memory research paper-packet --out artifacts\research-paper-packet.md
+```
+
+该数据包只导出方法草稿、机制 × 证据表、数据字典和当前数据缺口，不包含原始输入或模型响应。它会明确区分历史观察与有运行时证据的可复现实验结果，不会把案例数自动包装成统计结论。
+
 ## 安全边界
 
 - 仅用于自有系统、明确授权环境、比赛沙箱与防御研究。

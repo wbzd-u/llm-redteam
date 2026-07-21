@@ -19,7 +19,7 @@ from .planner import build_planner_brief, deterministic_draft, validate_plan_pay
 from .analysis_export import case_markdown, write_attempt_csv
 from .llm_provider import OpenAICompatiblePlanner, ProviderError
 from .campaign import create_campaign, load_campaign_inputs, run_campaign
-from .research import CHART_METRICS, research_summary, write_case_csv, write_summary_json, write_summary_svg
+from .research import CHART_METRICS, research_summary, write_case_csv, write_paper_packet, write_summary_json, write_summary_svg
 from .ipi_import import import_ipi_dataset
 from .jailbreaker_adapter import JailbreakerCEAdapter
 from .runner import run_once
@@ -195,6 +195,8 @@ def build_parser() -> argparse.ArgumentParser:
     research_csv.add_argument("--out", required=True)
     research_json = research_sub.add_parser("summary-json")
     research_json.add_argument("--out", required=True)
+    research_packet = research_sub.add_parser("paper-packet", help="write a paper-ready methods, data dictionary, and limitation packet")
+    research_packet.add_argument("--out", required=True)
     research_chart = research_sub.add_parser("chart")
     research_chart.add_argument("--metric", choices=sorted(CHART_METRICS), required=True)
     research_chart.add_argument("--out", required=True)
@@ -622,7 +624,9 @@ def main(argv: list[str] | None = None) -> None:
                 _json({"format": "case-csv", "path": str(args.out)})
             elif args.research_command == "summary-json":
                 write_summary_json(store, args.out)
-                _json({"format": "summary-json", "path": str(args.out)})
+            elif args.research_command == "paper-packet":
+                write_paper_packet(store, args.out)
+                _json({"format": "paper-packet-markdown", "path": str(args.out)})
             else:
                 write_summary_svg(store, metric=args.metric, path=args.out)
                 _json({"format": "svg", "metric": args.metric, "path": str(args.out)})

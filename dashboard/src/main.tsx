@@ -20,7 +20,7 @@ import ScienceRoundedIcon from "@mui/icons-material/ScienceRounded";
 import { BarChart } from "@mui/x-charts/BarChart";
 import { api } from "./api";
 import { theme } from "./theme";
-import type { CaseDetail, CaseRow, Overview, ResearchSummary } from "./types";
+import type { CaseDetail, CaseRow, Overview, PaperPacket, ResearchSummary } from "./types";
 
 const drawerWidth = 256;
 type Page = "home" | "cases" | "experience" | "research";
@@ -171,10 +171,51 @@ function CountChart({ title, data }: { title: string; data: Record<string, numbe
   </Paper>;
 }
 
-function ResearchPage({ summary }: { summary: ResearchSummary }) {
-  return <Stack spacing={3}><Box><Typography variant="h4">研究分析</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>这里用于查看整体规律和导出研究数据。首页不会混入这些统计。</Typography></Box>
-    <Grid container spacing={2.25}><Grid size={{ xs: 12, lg: 6 }}><CountChart title="按目标的案例分布" data={summary.cases_by_target} /></Grid><Grid size={{ xs: 12, lg: 6 }}><CountChart title="按尝试结果的分布" data={summary.attempts_by_outcome} /></Grid><Grid size={{ xs: 12, lg: 6 }}><CountChart title="按载体的案例分布" data={summary.cases_by_carrier} /></Grid><Grid size={{ xs: 12, lg: 6 }}><CountChart title="按语言标签的分布" data={summary.cases_by_language} /></Grid></Grid>
-  </Stack>;
+function downloadText(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function confidenceLabel(value: string) {
+  return ({ confirmed: "已确认", observed: "已观察", hypothesis: "待验证", unclassified: "待整理" } as Record<string, string>)[value] ?? value;
+}
+
+function ResearchPage({ summary, packet }: { summary: ResearchSummary; packet: PaperPacket }) {
+  const [tab, setTab] = useState(0);
+  const coverage = Object.entries(packet.readiness.field_coverage);
+  const matrix = packet.mechanism_matrix;
+  const content = [
+    <Stack spacing={3} key="mechanisms">
+      <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 }, borderLeft: 4, borderLeftColor: "primary.main" }}>
+        <Typography variant="overline" color="primary.main" fontWeight={700}>研究问题起点</Typography>
+        <Typography variant="h5" sx={{ mt: 0.4 }}>哪些机制会在什么条件下改变系统行为？</Typography>
+        <Typography color="text.secondary" sx={{ mt: 1 }}>从机制卡开始，而不是从单条输入开始。每张卡都有适用信号、前提、负信号和历史案例关系，可用于提出可证伪的实验假设。</Typography>
+      </Paper>
+      <Grid container spacing={2.25}>{matrix.map((item) => <Grid key={item.mechanism_id} size={{ xs: 12, md: 6, xl: 4 }}><Paper variant="outlined" sx={{ p: 2.25, height: "100%", display: "flex", flexDirection: "column" }}>
+        <Stack direction="row" justifyContent="space-between" gap={1} alignItems="flex-start"><Box><Typography variant="subtitle1" fontWeight={700}>{item.name}</Typography><Typography variant="caption" color="text.secondary">{item.category}</Typography></Box><Chip size="small" label={confidenceLabel(item.confidence)} color={item.confidence === "observed" ? "primary" : "default"} variant={item.confidence === "observed" ? "filled" : "outlined"} /></Stack>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1.25, flexGrow: 1 }}>{item.summary}</Typography>
+        <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: "wrap", rowGap: 1 }}><Chip size="small" label={`${item.case_count} 个案例`} variant="outlined" /><Chip size="small" label={`历史通关 ${item.confirmed_cases}`} color="success" variant="outlined" /><Chip size="small" label={`负例 ${item.negative_cases}`} variant="outlined" /></Stack>
+        {item.applicability_signals[0] && <Box sx={{ mt: 1.5 }}><Typography variant="caption" color="text.secondary">适用信号</Typography><Typography variant="body2">{item.applicability_signals[0]}</Typography></Box>}
+        {item.negative_signals[0] && <Box sx={{ mt: 1.1 }}><Typography variant="caption" color="text.secondary">排除信号</Typography><Typography variant="body2">{item.negative_signals[0]}</Typography></Box>}
+      </Paper></Grid>)}</Grid>
+    </Stack>,
+    <Stack spacing={3} key="data">
+      <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 } }}><Typography variant="h5">论文数据准备度</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>这不是给数据“打高分”，而是明确哪些字段已经能写进方法，哪些还需要补实验。</Typography><Grid container spacing={2} sx={{ mt: 1 }}>{coverage.map(([label, value]) => <Grid key={label} size={{ xs: 6, md: 4, xl: 3 }}><Metric label={label} value={`${Math.round(value.rate * 100)}%`} detail={`${value.filled} / ${value.total} 个案例已记录`} tone={value.rate >= 0.75 ? "success" : "neutral"} /></Grid>)}</Grid></Paper>
+      <Grid container spacing={2.25}><Grid size={{ xs: 12, lg: 7 }}><Paper variant="outlined" sx={{ p: 2.25, height: "100%" }}><Typography variant="h6">数据字典</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 1.5 }}>这些字段就是论文方法、附录和公开复现实验表的共同语言。</Typography><TableContainer><Table size="small"><TableHead><TableRow><TableCell>字段</TableCell><TableCell>含义</TableCell><TableCell>单位</TableCell></TableRow></TableHead><TableBody>{packet.data_dictionary.map((item) => <TableRow key={item.field}><TableCell><Typography component="code" variant="body2">{item.field}</Typography></TableCell><TableCell>{item.meaning}</TableCell><TableCell>{item.unit}</TableCell></TableRow>)}</TableBody></Table></TableContainer></Paper></Grid><Grid size={{ xs: 12, lg: 5 }}><Paper variant="outlined" sx={{ p: 2.25, height: "100%" }}><Typography variant="h6">下一批需要补的数据</Typography><Stack spacing={1.25} sx={{ mt: 1.5 }}>{packet.readiness.gaps.length ? packet.readiness.gaps.map((gap) => <Stack key={gap} direction="row" spacing={1} alignItems="flex-start"><AutoAwesomeRoundedIcon color="primary" fontSize="small" sx={{ mt: 0.25 }} /><Typography variant="body2">{gap}</Typography></Stack>) : <Typography color="text.secondary">当前数据满足基础描述性分析。仍应在论文中说明样本选择和外推边界。</Typography>}</Stack></Paper></Grid></Grid>
+      <Grid container spacing={2.25}><Grid size={{ xs: 12, lg: 6 }}><CountChart title="尝试结果分布" data={summary.attempts_by_outcome} /></Grid><Grid size={{ xs: 12, lg: 6 }}><CountChart title="载体分布" data={summary.cases_by_carrier} /></Grid></Grid>
+    </Stack>,
+    <Stack spacing={3} key="paper">
+      <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 } }}><Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={2}><Box><Typography variant="h5">论文数据包</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>自动整理方法草稿、机制矩阵、数据字典和局限性。它不会把原始输入或响应导出到这个页面。</Typography></Box><Stack direction="row" gap={1} flexWrap="wrap"><Button variant="outlined" onClick={() => downloadText("redteam-paper-packet.md", packet.markdown, "text/markdown;charset=utf-8")}>下载论文草稿</Button><Button variant="contained" onClick={() => downloadText("redteam-paper-data.json", JSON.stringify(packet, null, 2), "application/json;charset=utf-8")}>下载结构化数据</Button></Stack></Stack></Paper>
+      <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 } }}><Typography variant="h6">方法部分草稿</Typography><Typography color="text.secondary" sx={{ mt: 1.25, whiteSpace: "pre-wrap", lineHeight: 1.8 }}>{packet.methods_draft}</Typography></Paper>
+      <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 } }}><Typography variant="h6">机制 × 证据表</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 1.5 }}>先用这张表检查每个机制是否有正例、负例和可验证证据，再决定哪些适合进入论文主实验。</Typography><TableContainer><Table size="small"><TableHead><TableRow><TableCell>机制</TableCell><TableCell align="right">案例</TableCell><TableCell align="right">历史通关</TableCell><TableCell align="right">负例</TableCell><TableCell align="right">已验证证据</TableCell></TableRow></TableHead><TableBody>{matrix.map((item) => <TableRow key={item.mechanism_id}><TableCell>{item.name}</TableCell><TableCell align="right">{item.case_count}</TableCell><TableCell align="right">{item.confirmed_cases}</TableCell><TableCell align="right">{item.negative_cases}</TableCell><TableCell align="right">{item.verified_evidence_count}</TableCell></TableRow>)}</TableBody></Table></TableContainer></Paper>
+    </Stack>,
+  ];
+  return <Stack spacing={3}><Box><Typography variant="h4">机制研究工作台</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>把案例变成机制、把机制变成可复现实验、再把实验变成论文可用的数据和论证。</Typography></Box><Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable"><Tab label={`机制地图 (${matrix.length})`} /><Tab label="数据准备度" /><Tab label="论文数据包" /></Tabs>{content[tab]}</Stack>;
 }
 
 function DetailPage({ detail, close }: { detail: CaseDetail; close: () => void }) {
@@ -195,10 +236,11 @@ function App() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [research, setResearch] = useState<ResearchSummary | null>(null);
+  const [paperPacket, setPaperPacket] = useState<PaperPacket | null>(null);
   const [detail, setDetail] = useState<CaseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
-  const load = async (nextSource = source) => { try { setError(null); const [nextOverview, nextCases, nextResearch] = await Promise.all([api.overview(nextSource), api.cases(nextSource), api.research(nextSource)]); setOverview(nextOverview); setCases(nextCases); setResearch(nextResearch); } catch (err) { setError(err instanceof Error ? err.message : "无法连接本地 API"); } };
+  const load = async (nextSource = source) => { try { setError(null); const [nextOverview, nextCases, nextResearch, nextPacket] = await Promise.all([api.overview(nextSource), api.cases(nextSource), api.research(nextSource), api.paperPacket(nextSource)]); setOverview(nextOverview); setCases(nextCases); setResearch(nextResearch); setPaperPacket(nextPacket); } catch (err) { setError(err instanceof Error ? err.message : "无法连接本地 API"); } };
   useEffect(() => { void load(source); }, [source]);
   const selectCase = async (caseId: string) => { try { setDetail(await api.caseDetail(caseId)); } catch (err) { setError(err instanceof Error ? err.message : "无法加载案例"); } };
   const go = (next: Page) => { setDetail(null); setPage(next); };
@@ -208,7 +250,7 @@ function App() {
   return <ThemeProvider theme={theme}><CssBaseline /><Box sx={{ display: "flex", minHeight: "100vh" }}>
     <AppBar position="fixed" elevation={0} sx={{ zIndex: (value) => value.zIndex.drawer + 1, borderBottom: 1, borderColor: "divider", backgroundColor: "background.default" }}><Toolbar sx={{ minHeight: { xs: 64, md: 72 } }}><HubRoundedIcon sx={{ mr: 1.25, color: "primary.main" }} /><Typography variant="h6" sx={{ flexGrow: 1 }}>LLM 红队助手</Typography><ToggleButtonGroup size="small" value={source} exclusive onChange={(_, value) => { if (value) { setSource(value); setDetail(null); } }} sx={{ mr: 1.5 }}><ToggleButton value="user-kb">我的知识库</ToggleButton><ToggleButton value="all">全部数据</ToggleButton></ToggleButtonGroup><Button color="inherit" onClick={() => void load()}>刷新</Button></Toolbar></AppBar>
     <Drawer variant="permanent" sx={{ width: drawerWidth, flexShrink: 0, "& .MuiDrawer-paper": { width: drawerWidth, boxSizing: "border-box", borderRight: 1, borderColor: "divider", backgroundImage: "none" } }}><Toolbar sx={{ minHeight: { xs: 64, md: 72 } }} /><List sx={{ px: 1.25, pt: 2 }}>{nav.map(([key, label, icon]) => <ListItemButton key={key} selected={page === key && !detail} onClick={() => go(key)} sx={{ borderRadius: 1.5, mb: 0.5 }}><ListItemIcon>{icon}</ListItemIcon><ListItemText primary={label} /></ListItemButton>)}</List><Divider sx={{ mx: 2, my: 1 }} /><Box sx={{ px: 2.5, py: 2 }}><Stack direction="row" spacing={1} alignItems="center"><FactCheckRoundedIcon color="primary" fontSize="small" /><Typography variant="body2" fontWeight={600}>本地优先</Typography></Stack><Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>你的案例和证据保存在本机。这里不会自动把公开种子算作个人成绩。</Typography></Box></Drawer>
-    <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 }, pt: { xs: 11, md: 13 }, maxWidth: 1560, width: "100%" }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}。请先运行 <code>python -m redteam_memory serve</code>。</Alert>}{!overview || !research ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 320 }}><CircularProgress /></Box> : detail ? <DetailPage detail={detail} close={() => setDetail(null)} /> : page === "home" ? <HomePage overview={overview} rows={cases} selectCase={selectCase} goToCases={() => go("cases")} goToExperience={() => go("experience")} openIntake={() => setIntakeOpen(true)} /> : page === "cases" ? <CasesPage rows={cases} selectCase={selectCase} /> : page === "experience" ? <ExperiencePage rows={cases} selectCase={selectCase} /> : <ResearchPage summary={research} />}</Box>
+    <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 }, pt: { xs: 11, md: 13 }, maxWidth: 1560, width: "100%" }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}。请先运行 <code>python -m redteam_memory serve</code>。</Alert>}{!overview || !research || !paperPacket ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 320 }}><CircularProgress /></Box> : detail ? <DetailPage detail={detail} close={() => setDetail(null)} /> : page === "home" ? <HomePage overview={overview} rows={cases} selectCase={selectCase} goToCases={() => go("cases")} goToExperience={() => go("experience")} openIntake={() => setIntakeOpen(true)} /> : page === "cases" ? <CasesPage rows={cases} selectCase={selectCase} /> : page === "experience" ? <ExperiencePage rows={cases} selectCase={selectCase} /> : <ResearchPage summary={research} packet={paperPacket} />}</Box>
     <Dialog open={intakeOpen} onClose={() => setIntakeOpen(false)} maxWidth="sm" fullWidth><DialogTitle>导入一个新关卡</DialogTitle><DialogContent dividers><Stack spacing={2}><Typography>第一版采用结构化 JSON 导入，目的是保留题目、授权范围、成功判据和已有对话，避免以后只能靠截图回忆上下文。</Typography><Paper variant="outlined" sx={{ p: 1.5, backgroundColor: "background.default" }}><Typography component="code" variant="body2">python -m redteam_memory intake import examples/challenge-intake.example.json</Typography></Paper><Typography variant="body2" color="text.secondary">可先复制 <code>examples/challenge-intake.example.json</code>，把题目内容和授权范围填进去。导入后在“我的案例”中打开它，再匹配历史经验、创建计划并记录响应。</Typography></Stack></DialogContent><DialogActions><Button onClick={() => setIntakeOpen(false)}>知道了</Button><Button variant="contained" onClick={() => { setIntakeOpen(false); go("cases"); }}>打开我的案例</Button></DialogActions></Dialog>
   </Box></ThemeProvider>;
 }
