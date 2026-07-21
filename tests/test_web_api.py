@@ -25,6 +25,10 @@ def test_local_dashboard_api_exposes_read_only_case_and_research_data(tmp_path):
     assert client.get("/api/research/summary").status_code == 200
     assert "methods_draft" in client.get("/api/research/paper-packet").json()
     assert "mechanism_by_status" in client.get("/api/research/cross-tabs").json()
+    pyrit = client.get("/api/pyrit/workbench")
+    assert pyrit.status_code == 200
+    assert len(pyrit.json()["catalog"]) >= 6
+    assert pyrit.json()["totals"]["tasks"] == 1
     filtered = client.get("/api/overview?source=user-kb").json()
     assert filtered["summary"]["totals"]["cases"] == 0
 

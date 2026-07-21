@@ -258,6 +258,15 @@ python -m redteam_memory defense llm-guard `
 
 PyRIT 在本项目中是执行引擎：负责发送、接收和编排；自研层负责机制记忆、状态判断和证据归档。
 
+Dashboard 中的“PyRIT 专栏”将 PyRIT 从任务页中的一个选项提升为独立工作台。它展示：
+
+- 当前已可运行的单轮受控发送；
+- 即将接入的 Converter 管线与固定多轮；
+- 需要额外 attacker、scorer 与预算配置的自适应 Red Teaming、Crescendo、PAIR/TAP；
+- 每个任务是否已具备批准计划、审核输入、非敏感请求引用和外置凭据等执行条件。
+
+这个分层很重要：专栏会把“已接入”“待接入”“需要配置”清楚区分；不会把尚未实施的 PyRIT 策略伪装成已经可以运行的功能。
+
 准备一份带 `{PROMPT}` 占位符的 Burp 风格请求文件。默认只做 dry-run，只有显式添加 `--execute` 才会访问目标：
 
 ```powershell
@@ -397,6 +406,7 @@ python -m redteam_memory research paper-packet --out artifacts\research-paper-pa
 ## 当前限制
 
 - GraySwan 目前以单次 CLI 执行为主，多轮会话仍需显式传递聊天和父消息 ID。
+- PyRIT 目前已接入 `HTTPTarget` 与已审核 Campaign 的单轮受控发送；`PromptSendingAttack`、Converter、`MultiPromptSendingAttack`、`RedTeamingAttack`、`CrescendoAttack` 与 `PAIR/TAP` 的原生策略适配将按 PyRIT 专栏路线逐层接入。
 - Promptfoo 当前为配置导出，尚未内置 provider 与 CI 执行。
 - 防御感知评测目前由人工或已授权外部评估器提供 allow/block 观察；尚未连接具体防守产品的私有 API。
 - 本地 LLM Guard checkout 已归档，桥接层目前只支持 `PromptInjection`，且需要独立环境和模型依赖。

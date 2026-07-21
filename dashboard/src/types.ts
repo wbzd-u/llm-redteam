@@ -167,6 +167,32 @@ export interface PyRITReadiness {
   handoff: { runner: string; request_template: string; headers: string; placeholder: string; response_key: string; network_execution: string };
 }
 
+export interface PyRITWorkbench {
+  catalog: Array<{
+    id: string;
+    name: string;
+    stage: string;
+    kind: string;
+    requires: string[];
+    purpose: string;
+  }>;
+  tasks: Array<{
+    case_id: string;
+    title: string;
+    target: string;
+    ready: boolean;
+    pending_campaign_count: number;
+    profile_configured: boolean;
+    missing_checks: string[];
+  }>;
+  totals: {
+    tasks: number;
+    profile_configured: number;
+    ready: number;
+    pending_pyrit_campaigns: number;
+  };
+}
+
 export interface ResearchHypothesis extends PlanHypothesis {
   mechanism_id: string;
   mechanism: string;

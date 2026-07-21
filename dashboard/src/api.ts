@@ -1,4 +1,4 @@
-import type { CampaignManifest, CaseDetail, CaseRow, CreatedCampaign, ExecutionArtifacts, Overview, PaperPacket, PlannerProfile, PyRITProfile, PyRITReadiness, ReplayCampaignResult, ResearchSummary, TaskWorkspace } from "./types";
+import type { CampaignManifest, CaseDetail, CaseRow, CreatedCampaign, ExecutionArtifacts, Overview, PaperPacket, PlannerProfile, PyRITProfile, PyRITReadiness, PyRITWorkbench, ReplayCampaignResult, ResearchSummary, TaskWorkspace } from "./types";
 
 const baseUrl = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8787";
 const sourceQuery = (source: string) => source === "all" ? "" : `?source=${encodeURIComponent(source)}`;
@@ -21,6 +21,7 @@ export const api = {
   caseDetail: (caseId: string) => get<CaseDetail>(`/api/cases/${encodeURIComponent(caseId)}`),
   research: (source = "user-kb") => get<ResearchSummary>(`/api/research/summary${sourceQuery(source)}`),
   paperPacket: (source = "user-kb") => get<PaperPacket>(`/api/research/paper-packet${sourceQuery(source)}`),
+  pyritWorkbench: () => get<PyRITWorkbench>("/api/pyrit/workbench"),
   taskWorkspace: (caseId: string) => get<TaskWorkspace>(`/api/tasks/${encodeURIComponent(caseId)}/workspace`),
   createTask: (payload: unknown) => post<{ case_id: string }>("/api/tasks", payload),
   createTaskDraft: (caseId: string) => post(`/api/tasks/${encodeURIComponent(caseId)}/plan/draft`, {}),

@@ -16,14 +16,15 @@ import FolderOpenRoundedIcon from "@mui/icons-material/FolderOpenRounded";
 import HubRoundedIcon from "@mui/icons-material/HubRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import PlayCircleOutlineRoundedIcon from "@mui/icons-material/PlayCircleOutlineRounded";
+import RouteRoundedIcon from "@mui/icons-material/RouteRounded";
 import ScienceRoundedIcon from "@mui/icons-material/ScienceRounded";
 import { BarChart } from "@mui/x-charts/BarChart";
 import { api } from "./api";
 import { theme } from "./theme";
-import type { CaseDetail, CaseRow, ExecutionArtifacts, Overview, PaperPacket, PlannerProfile, PyRITProfile, ResearchSummary, TaskWorkspace } from "./types";
+import type { CaseDetail, CaseRow, ExecutionArtifacts, Overview, PaperPacket, PlannerProfile, PyRITProfile, PyRITWorkbench, ResearchSummary, TaskWorkspace } from "./types";
 
 const drawerWidth = 256;
-type Page = "home" | "cases" | "experience" | "research";
+type Page = "home" | "cases" | "experience" | "pyrit" | "research";
 
 const statusLabel: Record<string, string> = {
   confirmed: "历史已通关", probing: "正在探索", baseline: "已建立基线", verification: "等待验证",
@@ -211,6 +212,55 @@ function ResearchPage({ summary, packet }: { summary: ResearchSummary; packet: P
   return <Stack spacing={3}><Box><Typography variant="h4">机制研究工作台</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>把案例变成机制、把机制变成可复现实验、再把实验变成论文可用的数据和论证。</Typography></Box><Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable"><Tab label={`机制地图 (${matrix.length})`} /><Tab label="数据准备度" /><Tab label="论文数据包" /></Tabs>{content[tab]}</Stack>;
 }
 
+function PyRITWorkbenchPage({ workbench, openTask }: { workbench: PyRITWorkbench; openTask: (id: string) => void }) {
+  const stageTone = (stage: string) => stage === "现在可用" ? "success" : stage === "下一步接入" ? "primary" : "default";
+  const roadmap = [
+    { title: "单轮基线", detail: "PromptSendingAttack + HTTP Target，保存完整响应和执行元数据。", state: "已接入" },
+    { title: "受控变体", detail: "Converter Pipeline + Scorer，对同一输入做可追溯的条件比较。", state: "下一步" },
+    { title: "固定多轮", detail: "MultiPromptSendingAttack，复现你审核过的多轮对话序列。", state: "待接入" },
+    { title: "自适应搜索", detail: "RedTeaming、Crescendo、PAIR 与 TAP，按反馈生成和筛选下一步。", state: "待接入" },
+  ];
+  return <Stack spacing={3.5}>
+    <Box sx={{ maxWidth: 900 }}>
+      <Typography variant="overline" color="primary.main" fontWeight={700}>PyRIT 执行中枢</Typography>
+      <Typography variant="h3" sx={{ mt: 0.4 }}>把经验变成可重放、可评分、可迭代的攻击实验。</Typography>
+      <Typography color="text.secondary" sx={{ mt: 1.2, fontSize: "1.02rem" }}>项目负责机制记忆、计划审核、预算和证据；PyRIT 负责真正的攻击编排、目标交互、转换、评分与多轮状态。这里集中显示它的能力和每个任务的执行准备情况。</Typography>
+    </Box>
+
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 6, lg: 3 }}><Metric label="可管理任务" value={workbench.totals.tasks} detail="当前知识库中的全部任务" tone="neutral" /></Grid>
+      <Grid size={{ xs: 6, lg: 3 }}><Metric label="已配置目标" value={workbench.totals.profile_configured} detail="已有非敏感 PyRIT Profile" /></Grid>
+      <Grid size={{ xs: 6, lg: 3 }}><Metric label="可以执行" value={workbench.totals.ready} detail="计划、输入和目标均已就绪" tone="success" /></Grid>
+      <Grid size={{ xs: 6, lg: 3 }}><Metric label="待执行 Campaign" value={workbench.totals.pending_pyrit_campaigns} detail="已审核但尚未运行" /></Grid>
+    </Grid>
+
+    <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 } }}>
+      <Typography variant="h5">接入路线</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.6, mb: 2.5 }}>每一层都复用上一层的任务、预算和证据记录，不需要重新维护一套数据。</Typography>
+      <Grid container spacing={0}>{roadmap.map((item, index) => <Grid key={item.title} size={{ xs: 12, md: 3 }}><Box sx={{ position: "relative", pr: { md: 2 }, pb: { xs: 2, md: 0 }, minHeight: 118 }}>
+        <Stack direction="row" spacing={1.25} alignItems="center"><Box sx={{ width: 32, height: 32, borderRadius: "50%", display: "grid", placeItems: "center", bgcolor: index === 0 ? "success.main" : index === 1 ? "primary.main" : "action.selected", color: index < 2 ? "common.white" : "text.secondary", fontWeight: 700, flexShrink: 0 }}>{index + 1}</Box><Box><Typography fontWeight={700}>{item.title}</Typography><Typography variant="caption" color={index === 0 ? "success.main" : index === 1 ? "primary.main" : "text.secondary"}>{item.state}</Typography></Box></Stack>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1.15, pl: 5.5 }}>{item.detail}</Typography>
+      </Box></Grid>)}</Grid>
+    </Paper>
+
+    <Box>
+      <Typography variant="h5">PyRIT 能力地图</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.6, mb: 2 }}>绿色表示已经能从本项目交给 PyRIT；蓝色表示正在接入；其余能力需要先补齐 attacker、scorer 或搜索预算。</Typography>
+      <Grid container spacing={2}>{workbench.catalog.map((item) => <Grid key={item.id} size={{ xs: 12, md: 6, xl: 4 }}><Paper variant="outlined" sx={{ p: 2.25, height: "100%", borderTop: 3, borderTopColor: item.stage === "现在可用" ? "success.main" : item.stage === "下一步接入" ? "primary.main" : "divider" }}>
+        <Stack direction="row" justifyContent="space-between" gap={1} alignItems="flex-start"><Box><Typography variant="subtitle1" fontWeight={700}>{item.name}</Typography><Typography variant="caption" color="text.secondary">{item.kind}</Typography></Box><Chip size="small" label={item.stage} color={stageTone(item.stage)} variant={item.stage === "现在可用" ? "filled" : "outlined"} /></Stack>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1.2, minHeight: 42 }}>{item.purpose}</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5, mb: 0.75 }}>运行前需要</Typography>
+        <Stack direction="row" gap={0.75} flexWrap="wrap">{item.requires.map((requirement) => <Chip key={requirement} size="small" label={requirement} variant="outlined" />)}</Stack>
+      </Paper></Grid>)}</Grid>
+    </Box>
+
+    <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+      <Box sx={{ px: { xs: 2.25, md: 3 }, py: 2.5, borderBottom: 1, borderColor: "divider" }}><Typography variant="h5">任务执行准备</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>选择任务补齐缺失项，随后在任务工作区创建并审核 PyRIT Campaign。</Typography></Box>
+      {workbench.tasks.length ? <TableContainer><Table><TableHead><TableRow><TableCell>任务</TableCell><TableCell>目标</TableCell><TableCell>目标配置</TableCell><TableCell>待执行</TableCell><TableCell>还缺什么</TableCell><TableCell align="right">操作</TableCell></TableRow></TableHead><TableBody>{workbench.tasks.map((task) => <TableRow key={task.case_id} hover><TableCell><Typography fontWeight={700}>{task.title}</Typography><Typography variant="caption" color="text.secondary">{task.case_id.slice(0, 8)}</Typography></TableCell><TableCell>{task.target || "未填写"}</TableCell><TableCell><Chip size="small" label={task.profile_configured ? "已配置" : "未配置"} color={task.profile_configured ? "primary" : "default"} variant="outlined" /></TableCell><TableCell>{task.pending_campaign_count}</TableCell><TableCell sx={{ maxWidth: 360 }}>{task.ready ? <Typography variant="body2" color="success.main">所有检查均已通过</Typography> : <Typography variant="body2" color="text.secondary">{task.missing_checks.slice(0, 2).join("；")}{task.missing_checks.length > 2 ? `；另有 ${task.missing_checks.length - 2} 项` : ""}</Typography>}</TableCell><TableCell align="right"><Button size="small" variant={task.ready ? "contained" : "outlined"} onClick={() => openTask(task.case_id)}>{task.ready ? "打开并执行" : "打开任务配置"}</Button></TableCell></TableRow>)}</TableBody></Table></TableContainer> : <Box sx={{ p: 3 }}><Typography color="text.secondary">还没有任务。先在首页创建一个授权测试任务。</Typography></Box>}
+    </Paper>
+  </Stack>;
+}
+
 function TaskWorkspacePage({ workspace, close, refresh }: { workspace: TaskWorkspace; close: () => void; refresh: () => Promise<void> }) {
   const { task, recommended_mechanisms: mechanisms, next_action: nextAction } = workspace;
   const [saving, setSaving] = useState(false);
@@ -314,23 +364,24 @@ function App() {
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [research, setResearch] = useState<ResearchSummary | null>(null);
   const [paperPacket, setPaperPacket] = useState<PaperPacket | null>(null);
+  const [pyritWorkbench, setPyritWorkbench] = useState<PyRITWorkbench | null>(null);
   const [workspace, setWorkspace] = useState<TaskWorkspace | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [newTask, setNewTask] = useState({ title: "", target: "", challenge: "", successCriteria: "", authorization: "" });
   const [creatingTask, setCreatingTask] = useState(false);
-  const load = async (nextSource = source) => { try { setError(null); const [nextOverview, nextCases, nextResearch, nextPacket] = await Promise.all([api.overview(nextSource), api.cases(nextSource), api.research(nextSource), api.paperPacket(nextSource)]); setOverview(nextOverview); setCases(nextCases); setResearch(nextResearch); setPaperPacket(nextPacket); } catch (err) { setError(err instanceof Error ? err.message : "无法连接本地 API"); } };
+  const load = async (nextSource = source) => { try { setError(null); const [nextOverview, nextCases, nextResearch, nextPacket, nextPyritWorkbench] = await Promise.all([api.overview(nextSource), api.cases(nextSource), api.research(nextSource), api.paperPacket(nextSource), api.pyritWorkbench()]); setOverview(nextOverview); setCases(nextCases); setResearch(nextResearch); setPaperPacket(nextPacket); setPyritWorkbench(nextPyritWorkbench); } catch (err) { setError(err instanceof Error ? err.message : "无法连接本地 API"); } };
   useEffect(() => { void load(source); }, [source]);
   const selectCase = async (caseId: string) => { try { setWorkspace(await api.taskWorkspace(caseId)); } catch (err) { setError(err instanceof Error ? err.message : "无法加载任务"); } };
   const submitTask = async () => { if (!newTask.title.trim()) { setError("请至少填写任务名称。"); return; } setCreatingTask(true); try { const result = await api.createTask({ title: newTask.title, target: newTask.target, challenge: newTask.challenge, authorization_scope: newTask.authorization, success_criteria: newTask.successCriteria.split("\n").map((item) => item.trim()).filter(Boolean) }); setIntakeOpen(false); setNewTask({ title: "", target: "", challenge: "", successCriteria: "", authorization: "" }); await load(); await selectCase(result.case_id); } catch (err) { setError(err instanceof Error ? err.message : "创建任务失败"); } finally { setCreatingTask(false); } };
   const go = (next: Page) => { setWorkspace(null); setPage(next); };
   const nav = useMemo(() => [
-    ["home", "首页", <DashboardRoundedIcon />], ["cases", "我的案例", <FolderOpenRoundedIcon />], ["experience", "我的经验", <MenuBookRoundedIcon />], ["research", "研究分析", <ScienceRoundedIcon />],
+    ["home", "首页", <DashboardRoundedIcon />], ["cases", "我的案例", <FolderOpenRoundedIcon />], ["experience", "我的经验", <MenuBookRoundedIcon />], ["pyrit", "PyRIT 专栏", <RouteRoundedIcon />], ["research", "研究分析", <ScienceRoundedIcon />],
   ] as const, []);
   return <ThemeProvider theme={theme}><CssBaseline /><Box sx={{ display: "flex", minHeight: "100vh" }}>
     <AppBar position="fixed" elevation={0} sx={{ zIndex: (value) => value.zIndex.drawer + 1, borderBottom: 1, borderColor: "divider", backgroundColor: "background.default" }}><Toolbar sx={{ minHeight: { xs: 64, md: 72 } }}><HubRoundedIcon sx={{ mr: 1.25, color: "primary.main" }} /><Typography variant="h6" sx={{ flexGrow: 1 }}>LLM 红队助手</Typography><ToggleButtonGroup size="small" value={source} exclusive onChange={(_, value) => { if (value) { setSource(value); setWorkspace(null); } }} sx={{ mr: 1.5 }}><ToggleButton value="user-kb">我的知识库</ToggleButton><ToggleButton value="all">全部数据</ToggleButton></ToggleButtonGroup><Button color="inherit" onClick={() => void load()}>刷新</Button></Toolbar></AppBar>
     <Drawer variant="permanent" sx={{ width: drawerWidth, flexShrink: 0, "& .MuiDrawer-paper": { width: drawerWidth, boxSizing: "border-box", borderRight: 1, borderColor: "divider", backgroundImage: "none" } }}><Toolbar sx={{ minHeight: { xs: 64, md: 72 } }} /><List sx={{ px: 1.25, pt: 2 }}>{nav.map(([key, label, icon]) => <ListItemButton key={key} selected={page === key && !workspace} onClick={() => go(key)} sx={{ borderRadius: 1.5, mb: 0.5 }}><ListItemIcon>{icon}</ListItemIcon><ListItemText primary={label} /></ListItemButton>)}</List><Divider sx={{ mx: 2, my: 1 }} /><Box sx={{ px: 2.5, py: 2 }}><Stack direction="row" spacing={1} alignItems="center"><FactCheckRoundedIcon color="primary" fontSize="small" /><Typography variant="body2" fontWeight={600}>本地优先</Typography></Stack><Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>你的案例和证据保存在本机。这里不会自动把公开种子算作个人成绩。</Typography></Box></Drawer>
-    <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 }, pt: { xs: 11, md: 13 }, maxWidth: 1560, width: "100%" }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}。请先运行 <code>python -m redteam_memory serve</code>。</Alert>}{!overview || !research || !paperPacket ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 320 }}><CircularProgress /></Box> : workspace ? <TaskWorkspacePage workspace={workspace} close={() => setWorkspace(null)} refresh={async () => { await load(); setWorkspace(await api.taskWorkspace(workspace.task.case_id)); }} /> : page === "home" ? <HomePage overview={overview} rows={cases} selectCase={selectCase} goToCases={() => go("cases")} goToExperience={() => go("experience")} openIntake={() => setIntakeOpen(true)} /> : page === "cases" ? <CasesPage rows={cases} selectCase={selectCase} /> : page === "experience" ? <ExperiencePage rows={cases} goToCases={() => go("cases")} /> : <ResearchPage summary={research} packet={paperPacket} />}</Box>
+    <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 }, pt: { xs: 11, md: 13 }, maxWidth: 1560, width: "100%" }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}。请先运行 <code>python -m redteam_memory serve</code>。</Alert>}{!overview || !research || !paperPacket || !pyritWorkbench ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 320 }}><CircularProgress /></Box> : workspace ? <TaskWorkspacePage workspace={workspace} close={() => setWorkspace(null)} refresh={async () => { await load(); setWorkspace(await api.taskWorkspace(workspace.task.case_id)); }} /> : page === "home" ? <HomePage overview={overview} rows={cases} selectCase={selectCase} goToCases={() => go("cases")} goToExperience={() => go("experience")} openIntake={() => setIntakeOpen(true)} /> : page === "cases" ? <CasesPage rows={cases} selectCase={selectCase} /> : page === "experience" ? <ExperiencePage rows={cases} goToCases={() => go("cases")} /> : page === "pyrit" ? <PyRITWorkbenchPage workbench={pyritWorkbench} openTask={selectCase} /> : <ResearchPage summary={research} packet={paperPacket} />}</Box>
     <Dialog open={intakeOpen} onClose={() => setIntakeOpen(false)} maxWidth="md" fullWidth><DialogTitle>开始一个新任务</DialogTitle><DialogContent dividers><Stack spacing={2}><Typography color="text.secondary">先记录你已经知道的事实。创建后会直接进入任务控制台，由机制匹配和实验草稿帮助你推进。</Typography><TextField autoFocus required label="任务名称" value={newTask.title} onChange={(event) => setNewTask({ ...newTask, title: event.target.value })} fullWidth placeholder="例如：某关卡的会话状态研究" /><TextField label="目标 / 模型" value={newTask.target} onChange={(event) => setNewTask({ ...newTask, target: event.target.value })} fullWidth placeholder="例如：关卡名称、模型或本地沙箱" /><TextField label="题目与当前已知上下文" value={newTask.challenge} onChange={(event) => setNewTask({ ...newTask, challenge: event.target.value })} multiline minRows={4} fullWidth /><TextField label="成功判据（每行一条）" value={newTask.successCriteria} onChange={(event) => setNewTask({ ...newTask, successCriteria: event.target.value })} multiline minRows={3} fullWidth /><TextField label="授权范围与约束" value={newTask.authorization} onChange={(event) => setNewTask({ ...newTask, authorization: event.target.value })} multiline minRows={2} fullWidth /></Stack></DialogContent><DialogActions><Button onClick={() => setIntakeOpen(false)}>取消</Button><Button variant="contained" disabled={creatingTask} onClick={() => void submitTask()}>创建并进入任务</Button></DialogActions></Dialog>
   </Box></ThemeProvider>;
 }

@@ -1,5 +1,5 @@
 from redteam_memory.campaign import create_reviewed_campaign
-from redteam_memory.executor_profiles import normalize_pyrit_profile, pyrit_readiness
+from redteam_memory.executor_profiles import normalize_pyrit_profile, pyrit_readiness, pyrit_workbench_summary
 from redteam_memory.models import Case, ChallengeIntake, ResearchPlan
 from redteam_memory.store import MemoryStore
 
@@ -26,3 +26,15 @@ def test_pyrit_profile_only_keeps_non_secret_metadata_and_checks_readiness(tmp_p
         readiness = pyrit_readiness(store, case.case_id)
     assert readiness["ready"] is True
     assert readiness["handoff"]["request_template"] == "<local-captured-request-file>"
+
+
+def test_pyrit_workbench_summarizes_capabilities_and_task_gaps(tmp_path):
+    with MemoryStore(tmp_path / "memory.sqlite3") as store:
+        case = store.save_case(Case(title="workbench task", target="sandbox", challenge="brief"))
+        summary = pyrit_workbench_summary(store)
+
+    assert len(summary["catalog"]) >= 6
+    assert summary["totals"]["tasks"] == 1
+    assert summary["totals"]["ready"] == 0
+    assert summary["tasks"][0]["case_id"] == case.case_id
+    assert summary["tasks"][0]["missing_checks"]

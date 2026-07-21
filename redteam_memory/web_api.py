@@ -11,7 +11,7 @@ from .models import Attempt, Case, ChallengeIntake, Evidence, Turn
 from .planner import build_hypothesis_matrix, deterministic_draft
 from .execution_artifacts import compile_execution_artifacts
 from .campaign import create_reviewed_campaign, run_saved_replay_campaign
-from .executor_profiles import normalize_pyrit_profile, pyrit_readiness
+from .executor_profiles import normalize_pyrit_profile, pyrit_readiness, pyrit_workbench_summary
 from .campaign_exports import build_campaign_manifest
 from .external_results import import_campaign_results
 from .llm_planning import generate_reviewable_llm_plan, normalize_planner_profile
@@ -330,6 +330,11 @@ def create_app(db_path: str | Path):
     def mechanisms() -> list[dict[str, Any]]:
         with with_store() as store:
             return store.list_mechanism_cards()
+
+    @app.get("/api/pyrit/workbench")
+    def pyrit_workbench() -> dict[str, Any]:
+        with with_store() as store:
+            return pyrit_workbench_summary(store)
 
     @app.get("/api/research/summary")
     def research(source: str | None = None) -> dict[str, Any]:
