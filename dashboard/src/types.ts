@@ -109,6 +109,48 @@ export interface CaseDetail extends CaseRow {
   intake: { authorization_scope?: string; success_criteria?: string[]; constraints?: string[] } | null;
   turns: Array<{ turn_id: string; role: string; content: string; provenance: string; refusal: boolean }>;
   evidence: Array<{ evidence_id: string; kind: string; description: string; verified: boolean; source: string }>;
-  plans: Array<{ plan_id: string; planner: string; status: string; steps: unknown[] }>;
+  plans: Array<{ plan_id: string; planner: string; status: string; hypotheses?: PlanHypothesis[]; steps: PlanStep[] }>;
   campaigns: Array<{ campaign_id: string; target_kind: string; status: string; executed_turns: number; stop_reason: string }>;
+}
+
+export interface MechanismRecommendation {
+  mechanism: {
+    mechanism_id: string;
+    name: string;
+    category: string;
+    summary: string;
+    confidence: string;
+    applicability_signals: string[];
+    negative_signals: string[];
+    preconditions: string[];
+  };
+  score: number;
+  reasons: Array<{ kind: string; terms?: string[]; points?: number; count?: number }>;
+  historical_relations: Counts;
+}
+
+export interface TaskWorkspace {
+  task: CaseDetail;
+  recommended_mechanisms: MechanismRecommendation[];
+  next_action: { action: string; mechanism: string; rationale: string; confidence: string; requires_human_review: boolean; stage: string };
+  suggested_plan: { plan_id: string; hypotheses: PlanHypothesis[]; steps: PlanStep[]; notes: string } | null;
+}
+
+export interface PlanHypothesis {
+  id: string;
+  statement: string;
+  basis: string;
+  priority: string;
+  positive_signal: string;
+  negative_signal: string;
+}
+
+export interface PlanStep {
+  id: string;
+  hypothesis_id: string;
+  objective: string;
+  variables: Record<string, string>;
+  expected_signal: string;
+  stop_condition: string;
+  approval_required: boolean;
 }

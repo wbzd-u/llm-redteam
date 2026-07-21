@@ -27,3 +27,25 @@ def test_local_dashboard_api_exposes_read_only_case_and_research_data(tmp_path):
     assert "mechanism_by_status" in client.get("/api/research/cross-tabs").json()
     filtered = client.get("/api/overview?source=user-kb").json()
     assert filtered["summary"]["totals"]["cases"] == 0
+
+
+def test_task_workspace_creates_task_draft_and_observation(tmp_path):
+    db = tmp_path / "memory.sqlite3"
+    client = TestClient(create_app(db))
+    created = client.post("/api/tasks", json={
+        "title": "authorized task", "target": "sandbox", "challenge": "brief",
+        "authorization_scope": "local sandbox", "success_criteria": ["visible test result"],
+    })
+    assert created.status_code == 200
+    case_id = created.json()["case_id"]
+    workspace = client.get(f"/api/tasks/{case_id}/workspace")
+    assert workspace.status_code == 200
+    assert workspace.json()["next_action"]["action"] == "run_clean_baseline"
+    draft = client.post(f"/api/tasks/{case_id}/plan/draft")
+    assert draft.status_code == 200
+    observation = client.post(f"/api/tasks/{case_id}/observation", json={
+        "input_text": "baseline", "response_text": "observed response", "mechanism": "baseline",
+        "outcome": "unknown", "observed_effect": "no external effect",
+    })
+    assert observation.status_code == 200
+    assert observation.json()["attempt_id"]
