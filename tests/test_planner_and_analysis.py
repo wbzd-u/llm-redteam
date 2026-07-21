@@ -5,7 +5,7 @@ import redteam_memory.cli as cli_module
 from redteam_memory.analysis_export import case_markdown, write_attempt_csv
 from redteam_memory.mechanisms import import_mechanisms
 from redteam_memory.models import Attempt, Case
-from redteam_memory.planner import build_planner_brief, deterministic_draft, validate_plan_payload
+from redteam_memory.planner import build_hypothesis_matrix, build_planner_brief, deterministic_draft, validate_plan_payload
 from redteam_memory.store import MemoryStore
 
 
@@ -28,12 +28,14 @@ def test_planner_brief_draft_and_persistence(tmp_path):
         case = store.save_case(Case(title="Document task", challenge="Process a document", tags=["document-carrier"]))
         import_mechanisms(store, [_mechanism()])
         brief = build_planner_brief(store, case.case_id)
+        matrix = build_hypothesis_matrix(store, case.case_id)
         plan = store.save_research_plan(deterministic_draft(store, case.case_id))
         bundle = store.get_case(case.case_id)
 
     assert brief["recommended_mechanisms"][0]["mechanism"]["mechanism_id"] == "mechanism-doc"
     assert plan.status == "draft"
     assert plan.steps[0]["approval_required"] is True
+    assert matrix["hypotheses"][0]["mechanism"] == "Document boundary"
     assert bundle["plans"][0]["plan_id"] == plan.plan_id
 
 

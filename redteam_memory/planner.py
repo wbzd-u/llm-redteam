@@ -19,6 +19,82 @@ REQUIRED_HYPOTHESIS_FIELDS = {"id", "statement", "basis", "priority", "positive_
 REQUIRED_STEP_FIELDS = {"id", "hypothesis_id", "objective", "variables", "expected_signal", "stop_condition", "approval_required"}
 
 
+def _comparison_variables(card: dict[str, Any]) -> dict[str, str]:
+    """Choose a safe, mechanism-specific comparison axis for an experiment design."""
+    text = f"{card.get('name', '')} {card.get('category', '')} {' '.join(card.get('tags', []))}".casefold()
+    if any(term in text for term in ("multi-turn", "会话", "身份", "state", "memory")):
+        return {"comparison": "clean / persisted / reset session", "controlled_variable": "session state", "record": "conversation id, turn number, reset state"}
+    if any(term in text for term in ("language", "translation", "跨语言", "多语言")):
+        return {"comparison": "semantic-equivalent language variants", "controlled_variable": "language", "record": "language, translation provenance, semantic review"}
+    if any(term in text for term in ("document", "rag", "检索", "carrier", "载体", "context")):
+        return {"comparison": "trusted structured data / untrusted external context", "controlled_variable": "content provenance", "record": "carrier, source label, retrieval or parsing path"}
+    if any(term in text for term in ("tool", "schema", "regex", "validator", "评分", "语义")):
+        return {"comparison": "format-valid / meaning-valid control", "controlled_variable": "validator binding", "record": "parser result, tool state, external success criterion"}
+    return {"comparison": "clean baseline / one selected condition", "controlled_variable": "single mechanism variable", "record": "target version, session state, observable result"}
+
+
+def _historical_support(store: MemoryStore, mechanism_id: str, current_case_id: str) -> dict[str, Any]:
+    links = [link for link in store.list_mechanism_case_links(mechanism_id=mechanism_id) if link["case_id"] != current_case_id]
+    samples: list[dict[str, str]] = []
+    for link in links[:3]:
+        bundle = store.get_case(link["case_id"])
+        if bundle is not None:
+            samples.append({"case_id": bundle["case_id"], "title": bundle["title"], "relation": link["relation"], "status": bundle["status"]})
+    counts: dict[str, int] = {}
+    for link in links:
+        counts[link["relation"]] = counts.get(link["relation"], 0) + 1
+    return {"relation_counts": counts, "samples": samples}
+
+
+def build_hypothesis_matrix(store: MemoryStore, case_id: str, *, limit: int = 3) -> dict[str, Any]:
+    """Create multiple distinct, traceable research hypotheses for a Case.
+
+    This is a deterministic research aid: cards, match reasons and historical
+    links are surfaced verbatim, while each proposed experiment changes one
+    controlled variable and includes a non-escalating stop condition.
+    """
+    bundle = store.get_case(case_id)
+    if bundle is None:
+        raise KeyError(f"unknown case: {case_id}")
+    recommendations = recommend_mechanisms(store, case_id, limit=limit)
+    hypotheses: list[dict[str, Any]] = []
+    for index, recommendation in enumerate(recommendations):
+        card = recommendation["mechanism"]
+        support = _historical_support(store, card["mechanism_id"], case_id)
+        reasons = recommendation["reasons"]
+        basis_parts = [
+            f"当前任务匹配：{', '.join(reason['kind'] for reason in reasons) or 'mechanism recommendation'}",
+            f"历史关系：{support['relation_counts'] or '暂无直接关联'}",
+        ]
+        hypotheses.append({
+            "id": f"h{index + 1}",
+            "mechanism_id": card["mechanism_id"],
+            "mechanism": card["name"],
+            "statement": f"当前任务值得以“{card['name']}”作为一个可证伪的研究机制进行对照评估。",
+            "basis": "；".join(basis_parts),
+            "priority": "high" if index == 0 else "medium",
+            "positive_signal": card["applicability_signals"][0] if card["applicability_signals"] else "出现与该机制一致的可观察行为变化",
+            "negative_signal": card["negative_signals"][0] if card["negative_signals"] else "受控比较下没有可观察行为变化",
+            "variables": _comparison_variables(card),
+            "preconditions": card["preconditions"],
+            "historical_support": support,
+            "stop_condition": "完成预定对照后停止；没有外部证据时不得把结果升级为已确认影响。",
+            "next_if_negative": recommendations[index + 1]["mechanism"]["name"] if index + 1 < len(recommendations) else "补充基线、判据或目标信息后重新匹配机制",
+        })
+    if not hypotheses:
+        hypotheses.append({
+            "id": "h1", "mechanism_id": "baseline", "mechanism": "基础行为基线",
+            "statement": "当前信息不足以支持具体机制判断，应先建立可复现的基础行为基线。",
+            "basis": "没有充分匹配的历史机制卡。", "priority": "high",
+            "positive_signal": "在相同条件下获得稳定、可记录的基础响应",
+            "negative_signal": "基础响应无法复现或成功判据不明确",
+            "variables": {"comparison": "repeat baseline", "controlled_variable": "none", "record": "target version, session state, observable result"},
+            "preconditions": ["明确题目、目标和成功判据"], "historical_support": {"relation_counts": {}, "samples": []},
+            "stop_condition": "完成一次基础对照后停止并补全任务事实。", "next_if_negative": "补充任务信息",
+        })
+    return {"case_id": case_id, "method": "transparent-rule-based-v1", "hypotheses": hypotheses}
+
+
 def build_planner_brief(store: MemoryStore, case_id: str, *, limit: int = 5) -> dict[str, Any]:
     """Build the minimum traceable context a planner needs for one Case."""
     bundle = store.get_case(case_id)
@@ -42,6 +118,7 @@ def build_planner_brief(store: MemoryStore, case_id: str, *, limit: int = 5) -> 
             for evidence in bundle.get("evidence", [])
         ],
         "recommended_mechanisms": recommend_mechanisms(store, case_id, limit=limit),
+        "hypothesis_matrix": build_hypothesis_matrix(store, case_id, limit=min(limit, 3)),
         "required_output_schema": {
             "status": "draft",
             "hypotheses": [{key: "..." for key in sorted(REQUIRED_HYPOTHESIS_FIELDS)}],
@@ -101,43 +178,19 @@ def validate_plan_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def deterministic_draft(store: MemoryStore, case_id: str) -> ResearchPlan:
-    """Create a conservative draft from the strongest retrieved mechanism card."""
+    """Create a conservative multi-hypothesis draft from the research matrix."""
     brief = build_planner_brief(store, case_id)
-    recommendations = brief["recommended_mechanisms"]
-    if recommendations:
-        top = recommendations[0]
-        card = top["mechanism"]
-        basis = "; ".join(
-            reason["kind"] for reason in top["reasons"]
-        ) or "mechanism recommendation"
-        mechanism_name = card["name"]
-        positive = card["applicability_signals"][0] if card["applicability_signals"] else "observable behavior consistent with the mechanism"
-        negative = card["negative_signals"][0] if card["negative_signals"] else "no observable change under the controlled comparison"
-    else:
-        mechanism_name = "baseline behavior"
-        basis = "no sufficiently matched historical mechanism card"
-        positive = "a stable baseline response is recorded"
-        negative = "the baseline cannot be reproduced"
+    matrix = brief["hypothesis_matrix"]["hypotheses"]
     payload = validate_plan_payload({
         "status": "draft",
-        "hypotheses": [{
-            "id": "h1",
-            "statement": f"The Case is worth evaluating through the '{mechanism_name}' mechanism.",
-            "basis": basis,
-            "priority": "high",
-            "positive_signal": positive,
-            "negative_signal": negative,
-        }],
+        "hypotheses": [{key: item[key] for key in REQUIRED_HYPOTHESIS_FIELDS} for item in matrix],
         "steps": [{
-            "id": "s1",
-            "hypothesis_id": "h1",
-            "objective": "Run one controlled baseline/comparison and record the observable result.",
-            "variables": {"mechanism": mechanism_name, "comparison": "clean versus selected condition"},
-            "expected_signal": positive,
-            "stop_condition": "Stop after the planned comparison; do not infer confirmed impact without external evidence.",
-            "approval_required": True,
-        }],
-        "notes": "Deterministic draft; review and approve before target execution.",
+            "id": f"s{index + 1}", "hypothesis_id": item["id"],
+            "objective": f"为“{item['mechanism']}”运行一次受控比较并记录外部可观察结果。",
+            "variables": item["variables"], "expected_signal": item["positive_signal"],
+            "stop_condition": item["stop_condition"], "approval_required": True,
+        } for index, item in enumerate(matrix)],
+        "notes": "确定性多假设草稿；每一步均需人工审核后才能进入执行层。",
     })
     return ResearchPlan(
         case_id=case_id,

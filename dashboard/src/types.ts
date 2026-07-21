@@ -132,8 +132,19 @@ export interface MechanismRecommendation {
 export interface TaskWorkspace {
   task: CaseDetail;
   recommended_mechanisms: MechanismRecommendation[];
+  hypothesis_matrix: { method: string; hypotheses: ResearchHypothesis[] };
   next_action: { action: string; mechanism: string; rationale: string; confidence: string; requires_human_review: boolean; stage: string };
   suggested_plan: { plan_id: string; hypotheses: PlanHypothesis[]; steps: PlanStep[]; notes: string } | null;
+}
+
+export interface ResearchHypothesis extends PlanHypothesis {
+  mechanism_id: string;
+  mechanism: string;
+  variables: Record<string, string>;
+  preconditions: string[];
+  historical_support: { relation_counts: Counts; samples: Array<{ case_id: string; title: string; relation: string; status: string }> };
+  stop_condition: string;
+  next_if_negative: string;
 }
 
 export interface PlanHypothesis {

@@ -7,7 +7,7 @@ from typing import Any
 
 from .mechanisms import recommend_mechanisms
 from .models import Attempt, Case, ChallengeIntake, Evidence, Turn
-from .planner import deterministic_draft
+from .planner import build_hypothesis_matrix, deterministic_draft
 from .research import case_rows, paper_packet, research_cross_tabs, research_summary
 from .state import recommend_next
 from .store import MemoryStore
@@ -70,6 +70,7 @@ def create_app(db_path: str | Path):
             return {
                 "task": bundle,
                 "recommended_mechanisms": recommend_mechanisms(store, case_id, limit=5),
+                "hypothesis_matrix": build_hypothesis_matrix(store, case_id, limit=3),
                 "next_action": recommend_next(bundle).to_dict(),
                 "suggested_plan": deterministic_draft(store, case_id).to_dict() if not bundle.get("plans") else None,
             }
