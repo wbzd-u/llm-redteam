@@ -9,6 +9,7 @@ from .mechanisms import recommend_mechanisms
 from .models import Attempt, Case, ChallengeIntake, Evidence, Turn
 from .planner import build_hypothesis_matrix, deterministic_draft
 from .execution_artifacts import compile_execution_artifacts
+from .campaign import create_reviewed_campaign
 from .research import case_rows, paper_packet, research_cross_tabs, research_summary
 from .state import recommend_next
 from .store import MemoryStore
@@ -135,6 +136,43 @@ def create_app(db_path: str | Path):
             if plan is None or plan.get("case_id") != case_id:
                 raise HTTPException(status_code=404, detail="unknown task plan")
             return compile_execution_artifacts(store, plan_id)
+
+    @app.post("/api/tasks/{case_id}/plans/{plan_id}/campaigns")
+    def create_task_campaign(case_id: str, plan_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        raw_inputs = payload.get("inputs", [])
+        if not isinstance(raw_inputs, list):
+            raise HTTPException(status_code=422, detail="inputs must be a list")
+        inputs = [
+            {
+                "step_id": str(item.get("step_id", "")).strip(),
+                "input": str(item.get("input", "")).strip(),
+                "review_note": str(item.get("review_note", "")).strip(),
+            }
+            for item in raw_inputs if isinstance(item, dict)
+        ]
+        if len(inputs) != len(raw_inputs):
+            raise HTTPException(status_code=422, detail="each input must be an object")
+        try:
+            max_cost_raw = payload.get("max_cost")
+            campaign = None
+            with with_store() as store:
+                plan = store.get_research_plan(plan_id)
+                if plan is None or plan.get("case_id") != case_id:
+                    raise HTTPException(status_code=404, detail="unknown task plan")
+                campaign = create_reviewed_campaign(
+                    store, plan_id=plan_id,
+                    target_kind=str(payload.get("target_kind", "replay")).strip() or "replay",
+                    max_turns=int(payload.get("max_turns", 1)),
+                    max_seconds=float(payload.get("max_seconds", 60)),
+                    max_cost=None if max_cost_raw in (None, "") else float(max_cost_raw),
+                    conversation_id=str(payload.get("conversation_id", "")).strip(),
+                    inputs=inputs,
+                )
+            return {"campaign": campaign.to_dict(), "reviewed_input_count": len(inputs)}
+        except HTTPException:
+            raise
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.post("/api/tasks/{case_id}/observation")
     def add_task_observation(case_id: str, payload: dict[str, Any]) -> dict[str, Any]:

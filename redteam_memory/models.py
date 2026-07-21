@@ -122,6 +122,22 @@ class Campaign:
 
 
 @dataclass
+class CampaignInput:
+    """One locally stored, human-reviewed input for a pending Campaign."""
+
+    campaign_id: str
+    step_id: str
+    input_text: str
+    review_note: str = ""
+    input_id: str = field(default_factory=lambda: new_id("campaign-input"))
+    created_at: str = field(default_factory=utc_now)
+    approved_at: str = field(default_factory=utc_now)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class Turn:
     case_id: str
     role: str

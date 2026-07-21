@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .models import Campaign, utc_now
+from .models import Campaign, CampaignInput, utc_now
 from .runner import run_once
 from .state import derive_stage
 from .store import MemoryStore
@@ -59,6 +59,51 @@ def create_campaign(
         max_turns=max_turns, max_seconds=max_seconds, max_cost=max_cost,
         conversation_id=conversation_id,
     ))
+
+
+def create_reviewed_campaign(
+    store: MemoryStore,
+    *,
+    plan_id: str,
+    target_kind: str,
+    max_turns: int,
+    max_seconds: float,
+    max_cost: float | None,
+    inputs: list[dict[str, str]],
+    conversation_id: str = "",
+) -> Campaign:
+    """Create a pending campaign only after locally reviewing its inputs.
+
+    This persists the reviewed inputs in the local SQLite workspace but does
+    not contact a target. A later, explicit runner invocation is still needed.
+    """
+    plan = store.get_research_plan(plan_id)
+    if plan is None:
+        raise KeyError(f"unknown plan: {plan_id}")
+    if plan["status"] != "approved":
+        raise ValueError("campaign creation requires an approved plan")
+    if target_kind not in {"replay", "grayswan"}:
+        raise ValueError("target_kind must be replay or grayswan")
+    if not inputs:
+        raise ValueError("at least one reviewed campaign input is required")
+    step_ids = {str(step["id"]) for step in plan["steps"]}
+    supplied_ids = [str(item.get("step_id", "")).strip() for item in inputs]
+    if len(set(supplied_ids)) != len(supplied_ids) or any(step_id not in step_ids for step_id in supplied_ids):
+        raise ValueError("reviewed inputs must reference unique plan steps")
+    if any(not str(item.get("input", "")).strip() for item in inputs):
+        raise ValueError("each reviewed input must be non-empty")
+    campaign = create_campaign(
+        store, plan_id=plan_id, target_kind=target_kind, max_turns=max_turns,
+        max_seconds=max_seconds, max_cost=max_cost, conversation_id=conversation_id,
+    )
+    for item in inputs:
+        store.save_campaign_input(CampaignInput(
+            campaign_id=campaign.campaign_id,
+            step_id=str(item["step_id"]).strip(),
+            input_text=str(item["input"]).strip(),
+            review_note=str(item.get("review_note", "")).strip(),
+        ))
+    return campaign
 
 
 async def run_campaign(

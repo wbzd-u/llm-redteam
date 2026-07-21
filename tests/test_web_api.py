@@ -47,6 +47,13 @@ def test_task_workspace_creates_task_draft_and_observation(tmp_path):
     assert approved.json()["status"] == "approved"
     artifacts = client.get(f"/api/tasks/{case_id}/plans/{draft.json()['plan_id']}/artifacts")
     assert artifacts.json()["ready_for_campaign"] is True
+    campaign = client.post(f"/api/tasks/{case_id}/plans/{draft.json()['plan_id']}/campaigns", json={
+        "target_kind": "replay", "max_turns": 1, "max_seconds": 30, "max_cost": 0,
+        "inputs": [{"step_id": draft.json()["steps"][0]["id"], "input": "reviewed baseline"}],
+    })
+    assert campaign.status_code == 200
+    assert campaign.json()["campaign"]["status"] == "pending"
+    assert campaign.json()["reviewed_input_count"] == 1
     observation = client.post(f"/api/tasks/{case_id}/observation", json={
         "input_text": "baseline", "response_text": "observed response", "mechanism": "baseline",
         "outcome": "unknown", "observed_effect": "no external effect",

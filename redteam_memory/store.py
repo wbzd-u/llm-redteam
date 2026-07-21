@@ -9,6 +9,7 @@ from .models import (
     Attempt,
     Case,
     Campaign,
+    CampaignInput,
     ChallengeIntake,
     DefenseObservation,
     DefenseProfile,
@@ -146,6 +147,17 @@ CREATE TABLE IF NOT EXISTS campaigns (
 );
 CREATE INDEX IF NOT EXISTS idx_campaigns_case ON campaigns(case_id);
 CREATE INDEX IF NOT EXISTS idx_campaigns_plan ON campaigns(plan_id);
+CREATE TABLE IF NOT EXISTS campaign_inputs (
+    input_id TEXT PRIMARY KEY,
+    campaign_id TEXT NOT NULL REFERENCES campaigns(campaign_id),
+    step_id TEXT NOT NULL,
+    input_text TEXT NOT NULL,
+    review_note TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    approved_at TEXT NOT NULL,
+    UNIQUE(campaign_id, step_id)
+);
+CREATE INDEX IF NOT EXISTS idx_campaign_inputs_campaign ON campaign_inputs(campaign_id);
 CREATE TABLE IF NOT EXISTS defense_profiles (
     profile_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -515,6 +527,30 @@ class MemoryStore:
         self._require_case(case_id)
         rows = self._db.execute(
             "SELECT * FROM campaigns WHERE case_id=? ORDER BY created_at DESC", (case_id,)
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def save_campaign_input(self, item: CampaignInput) -> CampaignInput:
+        if self.get_campaign(item.campaign_id) is None:
+            raise KeyError(f"unknown campaign: {item.campaign_id}")
+        self._db.execute(
+            """INSERT INTO campaign_inputs
+            (input_id,campaign_id,step_id,input_text,review_note,created_at,approved_at)
+            VALUES (?,?,?,?,?,?,?)
+            ON CONFLICT(campaign_id,step_id) DO UPDATE SET
+              input_text=excluded.input_text, review_note=excluded.review_note,
+              approved_at=excluded.approved_at""",
+            (item.input_id, item.campaign_id, item.step_id, item.input_text,
+             item.review_note, item.created_at, item.approved_at),
+        )
+        self._db.commit()
+        return item
+
+    def list_campaign_inputs(self, campaign_id: str) -> list[dict[str, Any]]:
+        if self.get_campaign(campaign_id) is None:
+            raise KeyError(f"unknown campaign: {campaign_id}")
+        rows = self._db.execute(
+            "SELECT * FROM campaign_inputs WHERE campaign_id=? ORDER BY rowid", (campaign_id,)
         ).fetchall()
         return [dict(row) for row in rows]
 

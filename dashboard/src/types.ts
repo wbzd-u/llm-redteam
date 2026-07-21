@@ -176,3 +176,8 @@ export interface ExecutionArtifacts {
   inspect: { note: string; samples: Array<{ id: string; input: null }> };
   promptfoo: { note: string; tests: Array<{ description: string; vars: { prompt: null } }> };
 }
+
+export interface CreatedCampaign {
+  campaign: { campaign_id: string; status: string; target_kind: string; max_turns: number; max_seconds: number; max_cost: number | null };
+  reviewed_input_count: number;
+}

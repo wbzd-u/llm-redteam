@@ -216,6 +216,11 @@ function TaskWorkspacePage({ workspace, close, refresh }: { workspace: TaskWorks
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [artifacts, setArtifacts] = useState<ExecutionArtifacts | null>(null);
+  const [campaignInputs, setCampaignInputs] = useState<Record<string, string>>({});
+  const [approvedInputs, setApprovedInputs] = useState<Record<string, boolean>>({});
+  const [maxTurns, setMaxTurns] = useState("1");
+  const [maxSeconds, setMaxSeconds] = useState("60");
+  const [maxCost, setMaxCost] = useState("0");
   const [inputText, setInputText] = useState("");
   const [responseText, setResponseText] = useState("");
   const [mechanism, setMechanism] = useState(mechanisms[0]?.mechanism.name ?? "baseline");
@@ -227,6 +232,7 @@ function TaskWorkspacePage({ workspace, close, refresh }: { workspace: TaskWorks
   const saveDraft = async () => { setSaving(true); try { await api.createTaskDraft(task.case_id); setNotice("已生成一份待审核的实验草稿。它不会自动执行。 "); await refresh(); } catch (error) { setNotice(error instanceof Error ? error.message : "生成草稿失败"); } finally { setSaving(false); } };
   const approveDraft = async (planId: string) => { setSaving(true); try { await api.approveTaskPlan(task.case_id, planId); setNotice("计划已批准。下一步可为每个步骤准备经审核的输入，再交给执行器。 "); await refresh(); } catch (error) { setNotice(error instanceof Error ? error.message : "批准计划失败"); } finally { setSaving(false); } };
   const previewArtifacts = async (planId: string) => { setSaving(true); try { setArtifacts(await api.executionArtifacts(task.case_id, planId)); setNotice("已生成执行工件预览：所有输入仍为空，等待你逐步审核填写。 "); } catch (error) { setNotice(error instanceof Error ? error.message : "无法生成执行工件"); } finally { setSaving(false); } };
+  const createPendingCampaign = async (planId: string) => { const inputs = (task.plans[0]?.steps ?? []).filter((step) => approvedInputs[step.id] && campaignInputs[step.id]?.trim()).map((step) => ({ step_id: step.id, input: campaignInputs[step.id].trim(), review_note: "reviewed in dashboard" })); if (!inputs.length) { setNotice("请先填写至少一个步骤的输入，并勾选“我已审核”。 "); return; } setSaving(true); try { const result = await api.createTaskCampaign(task.case_id, planId, { target_kind: "replay", max_turns: Number(maxTurns), max_seconds: Number(maxSeconds), max_cost: maxCost.trim() === "" ? null : Number(maxCost), inputs }); setNotice(`已创建待执行 Campaign（${result.reviewed_input_count} 个已审核输入）。它尚未运行。 `); await refresh(); } catch (error) { setNotice(error instanceof Error ? error.message : "创建 Campaign 失败"); } finally { setSaving(false); } };
   const saveObservation = async () => { if (!responseText.trim()) { setNotice("请先记录本轮观察到的响应。 "); return; } setSaving(true); try { await api.addObservation(task.case_id, { input_text: inputText, response_text: responseText, mechanism, outcome, observed_effect: effect, refusal, evidence_description: evidenceDescription, evidence_verified: evidenceVerified }); setNotice("这一轮观察已记录，下一步建议已更新。 "); setInputText(""); setResponseText(""); setEffect(""); setEvidenceDescription(""); setRefusal(false); setEvidenceVerified(false); await refresh(); } catch (error) { setNotice(error instanceof Error ? error.message : "保存观察失败"); } finally { setSaving(false); } };
   const draft = task.plans[0] ?? workspace.suggested_plan;
   const artifactPanel = task.plans[0]?.status === "approved" ? <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 }, borderLeft: 4, borderLeftColor: "success.main" }}>
@@ -238,6 +244,10 @@ function TaskWorkspacePage({ workspace, close, refresh }: { workspace: TaskWorks
       <Grid size={{ xs: 12, md: 6, xl: 3 }}><Paper variant="outlined" sx={{ p: 1.75, height: "100%" }}><Typography fontWeight={700}>Promptfoo 回归清单</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>{artifacts.promptfoo.tests.length} 条待配置测试；模型连接与提示均未填写。</Typography><Typography variant="caption" color="primary.main" sx={{ display: "block", mt: 1 }}>用于版本对比与回归检查</Typography></Paper></Grid>
       <Grid size={{ xs: 12 }}><Alert severity="info">下一步是：为某一个步骤填写并审核测试输入、设定轮数、时间和成本上限，再创建待执行 Campaign。当前页面不会自动运行。</Alert></Grid>
     </Grid>}
+    <Divider sx={{ my: 2 }} />
+    <Typography variant="h6">审核输入并创建待执行 Campaign</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>每个输入都要由你手工填写并确认。系统只会保存到本地工作区，创建后的状态为“待执行”，不会发出网络请求。</Typography>
+    <Grid container spacing={1.5} sx={{ mt: 0.75 }}>{(task.plans[0]?.steps ?? []).map((step) => <Grid size={{ xs: 12, md: 6 }} key={step.id}><Paper variant="outlined" sx={{ p: 1.5 }}><Typography variant="subtitle2">{step.id}：{step.objective}</Typography><TextField label="经人工审核的测试输入" value={campaignInputs[step.id] ?? ""} onChange={(event) => setCampaignInputs((current) => ({ ...current, [step.id]: event.target.value }))} multiline minRows={2} fullWidth sx={{ mt: 1 }} /><FormControlLabel control={<Checkbox checked={Boolean(approvedInputs[step.id])} onChange={(event) => setApprovedInputs((current) => ({ ...current, [step.id]: event.target.checked }))} />} label="我已审核此输入及其预算范围" /></Paper></Grid>)}</Grid>
+    <Grid container spacing={1.5} sx={{ mt: 0.75, alignItems: "center" }}><Grid size={{ xs: 12, sm: 4 }}><TextField label="最多轮数" type="number" value={maxTurns} onChange={(event) => setMaxTurns(event.target.value)} fullWidth /></Grid><Grid size={{ xs: 12, sm: 4 }}><TextField label="最长时间（秒）" type="number" value={maxSeconds} onChange={(event) => setMaxSeconds(event.target.value)} fullWidth /></Grid><Grid size={{ xs: 12, sm: 4 }}><TextField label="最大成本（USD，可为 0）" type="number" value={maxCost} onChange={(event) => setMaxCost(event.target.value)} fullWidth /></Grid><Grid size={{ xs: 12 }}><Button variant="contained" disabled={saving} onClick={() => void createPendingCampaign(task.plans[0].plan_id)}>创建待执行 Campaign</Button></Grid></Grid>
   </Paper> : null;
   return <Stack spacing={3}>
     {artifactPanel}

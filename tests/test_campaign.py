@@ -2,7 +2,7 @@ import asyncio
 import json
 
 import redteam_memory.cli as cli_module
-from redteam_memory.campaign import create_campaign, load_campaign_inputs, run_campaign
+from redteam_memory.campaign import create_campaign, create_reviewed_campaign, load_campaign_inputs, run_campaign
 from redteam_memory.models import Case, ResearchPlan
 from redteam_memory.store import MemoryStore
 from redteam_memory.targets import ReplayTarget, TargetResponse
@@ -76,3 +76,18 @@ def test_campaign_input_file_and_plan_approval_cli(tmp_path, capsys):
     inputs_file = tmp_path / "inputs.json"
     inputs_file.write_text(json.dumps([{"step_id": "s1", "input": "controlled"}]), encoding="utf-8")
     assert load_campaign_inputs(inputs_file) == [{"step_id": "s1", "input": "controlled"}]
+
+
+def test_reviewed_campaign_persists_local_inputs_without_execution(tmp_path):
+    with MemoryStore(tmp_path / "memory.sqlite3") as store:
+        case = store.save_case(Case(title="reviewed campaign", challenge="brief"))
+        plan = _approved_plan(store, case.case_id)
+        campaign = create_reviewed_campaign(
+            store, plan_id=plan.plan_id, target_kind="replay", max_turns=1,
+            max_seconds=60, max_cost=0, inputs=[{
+                "step_id": "s1", "input": "reviewed local test", "review_note": "baseline only",
+            }],
+        )
+        inputs = store.list_campaign_inputs(campaign.campaign_id)
+    assert campaign.status == "pending"
+    assert inputs[0]["input_text"] == "reviewed local test"
