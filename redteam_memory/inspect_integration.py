@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .store import MemoryStore
+from .campaign_exports import build_campaign_manifest
 
 
 def _sample_input(bundle: dict[str, Any]) -> str:
@@ -94,4 +95,50 @@ def task_from_memory(
         solver=generate(),
         model=model,
         metadata={"source": "ai_redteam_agent", "db_path": str(Path(db_path).resolve())},
+    )
+
+
+def load_inspect_campaign_samples(db_path: str | Path, campaign_id: str) -> list[Any]:
+    """Load only the human-reviewed inputs linked to one Campaign."""
+    try:
+        from inspect_ai.dataset import Sample
+    except ImportError as exc:
+        raise RuntimeError(
+            "Inspect AI is not importable in this Python environment. "
+            "Run with the Inspect project venv or install Inspect AI."
+        ) from exc
+    with MemoryStore(db_path) as store:
+        manifest = build_campaign_manifest(store, campaign_id, format="inspect")
+    return [
+        Sample(input=item["input"], target="", metadata=dict(item["metadata"]))
+        for item in manifest["samples"]
+    ]
+
+
+def task_from_campaign(
+    db_path: str | Path,
+    *,
+    campaign_id: str,
+    model: str | None = None,
+) -> Any:
+    """Create an Inspect task from one reviewed Campaign without a generic scorer."""
+    try:
+        from inspect_ai import Task
+        from inspect_ai.solver import generate
+    except ImportError as exc:
+        raise RuntimeError(
+            "Inspect AI is not importable in this Python environment. "
+            "Run with the Inspect project venv or install Inspect AI."
+        ) from exc
+    samples = load_inspect_campaign_samples(db_path, campaign_id)
+    return Task(
+        dataset=samples,
+        solver=generate(),
+        model=model,
+        metadata={
+            "source": "ai_redteam_agent",
+            "campaign_id": campaign_id,
+            "db_path": str(Path(db_path).resolve()),
+            "scorer_policy": "deployment-specific scorer required",
+        },
     )

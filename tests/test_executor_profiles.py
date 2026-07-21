@@ -20,7 +20,7 @@ def test_pyrit_profile_only_keeps_non_secret_metadata_and_checks_readiness(tmp_p
             "expected_signal": "signal", "stop_condition": "stop", "approval_required": True,
         }]))
         create_reviewed_campaign(
-            store, plan_id=plan.plan_id, target_kind="replay", max_turns=1, max_seconds=30,
+            store, plan_id=plan.plan_id, target_kind="pyrit-http", max_turns=1, max_seconds=30,
             max_cost=None, inputs=[{"step_id": "s1", "input": "controlled"}],
         )
         readiness = pyrit_readiness(store, case.case_id)

@@ -59,6 +59,11 @@ def test_task_workspace_creates_task_draft_and_observation(tmp_path):
     })
     assert replay.status_code == 200
     assert replay.json()["campaign"]["status"] == "completed"
+    pyrit_campaign = client.post(f"/api/tasks/{case_id}/plans/{draft.json()['plan_id']}/campaigns", json={
+        "target_kind": "pyrit-http", "max_turns": 1, "max_seconds": 30,
+        "inputs": [{"step_id": draft.json()["steps"][0]["id"], "input": "reviewed pyrit input"}],
+    })
+    assert pyrit_campaign.status_code == 200
     pyrit_profile = client.post(f"/api/tasks/{case_id}/pyrit-profile", json={
         "profile_name": "local browser capture", "request_reference": "captured locally",
         "placeholder": "{PROMPT}", "response_key": "", "prompt_encoding": "json",
@@ -67,6 +72,7 @@ def test_task_workspace_creates_task_draft_and_observation(tmp_path):
     })
     assert pyrit_profile.status_code == 200
     assert pyrit_profile.json()["profile"]["request_reference"] == "captured locally"
+    assert pyrit_profile.json()["ready"] is True
     inspect_manifest = client.get(f"/api/tasks/{case_id}/campaigns/{campaign.json()['campaign']['campaign_id']}/export/inspect")
     promptfoo_manifest = client.get(f"/api/tasks/{case_id}/campaigns/{campaign.json()['campaign']['campaign_id']}/export/promptfoo")
     assert inspect_manifest.json()["task"]["scorer"] is None

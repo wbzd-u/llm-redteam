@@ -19,6 +19,7 @@ from .planner import build_planner_brief, deterministic_draft, validate_plan_pay
 from .analysis_export import case_markdown, write_attempt_csv
 from .llm_provider import OpenAICompatiblePlanner, ProviderError
 from .campaign import create_campaign, load_campaign_inputs, run_campaign
+from .campaign_exports import build_campaign_manifest
 from .research import CHART_METRICS, research_summary, write_case_csv, write_paper_packet, write_summary_json, write_summary_svg
 from .ipi_import import import_ipi_dataset
 from .jailbreaker_adapter import JailbreakerCEAdapter
@@ -154,18 +155,32 @@ def build_parser() -> argparse.ArgumentParser:
     campaign_sub = campaign.add_subparsers(dest="campaign_command", required=True)
     campaign_create = campaign_sub.add_parser("create")
     campaign_create.add_argument("--plan-id", required=True)
-    campaign_create.add_argument("--target-kind", choices=["replay", "grayswan"], required=True)
+    campaign_create.add_argument("--target-kind", choices=["replay", "grayswan", "pyrit-http"], required=True)
     campaign_create.add_argument("--max-turns", type=int, default=3)
     campaign_create.add_argument("--max-seconds", type=float, default=120.0)
     campaign_create.add_argument("--max-cost", type=float, default=None)
     campaign_create.add_argument("--conversation-id", default="")
     campaign_list = campaign_sub.add_parser("list")
     campaign_list.add_argument("--case-id", required=True)
+    campaign_export = campaign_sub.add_parser("export", help="export reviewed inputs for Inspect AI or Promptfoo")
+    campaign_export.add_argument("--campaign-id", required=True)
+    campaign_export.add_argument("--format", choices=["inspect", "promptfoo"], required=True)
+    campaign_export.add_argument("--out", required=True)
     campaign_replay = campaign_sub.add_parser("replay", help="run supplied approved inputs through an offline Replay target")
     campaign_replay.add_argument("--campaign-id", required=True)
     campaign_replay.add_argument("--inputs-file", required=True)
     campaign_replay.add_argument("--response", default="controlled response")
     campaign_replay.add_argument("--response-file", default=None)
+    campaign_pyrit = campaign_sub.add_parser("pyrit-http", help="run stored reviewed Campaign inputs through PyRIT HTTPTarget")
+    campaign_pyrit.add_argument("--campaign-id", required=True)
+    campaign_pyrit.add_argument("--request-file", required=True)
+    campaign_pyrit.add_argument("--placeholder", default="{PROMPT}")
+    campaign_pyrit.add_argument("--response-key", default=None)
+    campaign_pyrit.add_argument("--prompt-encoding", choices=["raw", "json", "url"], default="raw")
+    campaign_pyrit.add_argument("--model-name", default="")
+    campaign_pyrit.add_argument("--timeout", type=float, default=30.0)
+    campaign_pyrit.add_argument("--no-tls", action="store_true")
+    campaign_pyrit.add_argument("--execute", action="store_true")
     campaign_grayswan = campaign_sub.add_parser("grayswan", help="run supplied approved inputs through a GraySwan challenge")
     campaign_grayswan.add_argument("--campaign-id", required=True)
     campaign_grayswan.add_argument("--inputs-file", required=True)
@@ -573,8 +588,18 @@ def main(argv: list[str] | None = None) -> None:
                 if args.campaign_command == "list":
                     _json(store.list_campaigns(args.case_id))
                     return
-                inputs = load_campaign_inputs(args.inputs_file)
+                if args.campaign_command == "export":
+                    manifest = build_campaign_manifest(store, args.campaign_id, format=args.format)
+                    destination = Path(args.out)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+                    _json({
+                        "format": args.format, "campaign_id": args.campaign_id,
+                        "path": str(destination), "executed": False,
+                    })
+                    return
                 if args.campaign_command == "replay":
+                    inputs = load_campaign_inputs(args.inputs_file)
                     response = Path(args.response_file).read_text(encoding="utf-8") if args.response_file else args.response
                     _json(asyncio.run(run_campaign(
                         store, campaign_id=args.campaign_id, target=ReplayTarget(response), inputs=inputs,
@@ -583,6 +608,31 @@ def main(argv: list[str] | None = None) -> None:
                 campaign_record = store.get_campaign(args.campaign_id)
                 if campaign_record is None:
                     raise KeyError(f"unknown campaign: {args.campaign_id}")
+                if args.campaign_command == "pyrit-http":
+                    if campaign_record["target_kind"] != "pyrit-http":
+                        raise ValueError("campaign target_kind does not match pyrit-http")
+                    reviewed_inputs = [
+                        {"step_id": str(item["step_id"]), "input": str(item["input_text"])}
+                        for item in store.list_campaign_inputs(args.campaign_id)
+                    ]
+                    if not args.execute:
+                        _json({
+                            "dry_run": True, "campaign_id": args.campaign_id,
+                            "reviewed_inputs": len(reviewed_inputs), "request_loaded": False,
+                            "network_execution": False,
+                        })
+                        return
+                    raw_request = Path(args.request_file).read_text(encoding="utf-8")
+                    target = PyRITHTTPTarget(
+                        raw_http_request=raw_request, prompt_placeholder=args.placeholder,
+                        response_key=args.response_key, prompt_encoding=args.prompt_encoding,
+                        use_tls=not args.no_tls, timeout=args.timeout, model_name=args.model_name,
+                    )
+                    _json(asyncio.run(run_campaign(
+                        store, campaign_id=args.campaign_id, target=target, inputs=reviewed_inputs,
+                    )))
+                    return
+                inputs = load_campaign_inputs(args.inputs_file)
                 if campaign_record["target_kind"] != "grayswan":
                     raise ValueError("campaign target_kind does not match grayswan")
                 if not args.execute:

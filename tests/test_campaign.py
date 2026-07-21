@@ -104,3 +104,24 @@ def test_saved_replay_campaign_uses_only_local_reviewed_inputs(tmp_path):
         result = asyncio.run(run_saved_replay_campaign(store, campaign_id=campaign.campaign_id, response="local response"))
     assert result["campaign"]["status"] == "completed"
     assert result["results"][0]["response"] == "local response"
+
+
+def test_pyrit_campaign_dry_run_uses_stored_input_count_without_reading_request(tmp_path, capsys):
+    db = tmp_path / "memory.sqlite3"
+    with MemoryStore(db) as store:
+        case = store.save_case(Case(title="pyrit campaign", challenge="brief"))
+        plan = _approved_plan(store, case.case_id)
+        campaign = create_reviewed_campaign(
+            store, plan_id=plan.plan_id, target_kind="pyrit-http", max_turns=1,
+            max_seconds=30, max_cost=None, inputs=[{"step_id": "s1", "input": "reviewed"}],
+        )
+    missing_request = tmp_path / "never-read.http"
+    cli_module.main([
+        "--db", str(db), "campaign", "pyrit-http",
+        "--campaign-id", campaign.campaign_id, "--request-file", str(missing_request),
+    ])
+    output = json.loads(capsys.readouterr().out)
+    assert output["dry_run"] is True
+    assert output["reviewed_inputs"] == 1
+    assert output["request_loaded"] is False
+    assert not missing_request.exists()

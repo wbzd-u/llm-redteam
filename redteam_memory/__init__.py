@@ -14,7 +14,7 @@ from .research import paper_packet, research_cross_tabs, research_summary, write
 from .web_api import create_app
 from .defense import coverage_matrix, observation_verdict, regression_gate
 from .llm_guard_adapter import LLMGuardAdapter, record_llm_guard_observation
-from .inspect_integration import load_inspect_samples, task_from_memory
+from .inspect_integration import load_inspect_campaign_samples, load_inspect_samples, task_from_campaign, task_from_memory
 from .ipi_import import import_ipi_dataset, ipi_case_id, iter_ipi_records
 from .jailbreaker_adapter import JailbreakerCEAdapter
 from .markdown_import import parse_break_log, parse_break_log_text
@@ -58,6 +58,7 @@ __all__ = [
     "build_planner_brief",
     "deterministic_draft",
     "load_inspect_samples",
+    "load_inspect_campaign_samples",
     "load_campaign_inputs",
     "load_intake_file",
     "load_mechanism_file",
@@ -84,6 +85,7 @@ __all__ = [
     "run_campaign",
     "run_saved_replay_campaign",
     "task_from_memory",
+    "task_from_campaign",
     "import_mechanisms",
     "validate_plan_payload",
     "write_attempt_csv",

@@ -38,7 +38,7 @@ def pyrit_readiness(store: MemoryStore, case_id: str) -> dict[str, Any]:
         raise KeyError(f"unknown case: {case_id}")
     profile = dict((bundle.get("intake") or {}).get("target_config", {}).get("pyrit_profile", {}))
     approved_plan = next((item for item in bundle.get("plans", []) if item.get("status") == "approved"), None)
-    pending = [item for item in bundle.get("campaigns", []) if item.get("status") == "pending"]
+    pending = [item for item in bundle.get("campaigns", []) if item.get("status") == "pending" and item.get("target_kind") == "pyrit-http"]
     checks = [
         {"id": "approved_plan", "label": "存在已批准的实验计划", "ready": approved_plan is not None},
         {"id": "reviewed_campaign", "label": "存在包含人工审核输入的待执行 Campaign", "ready": bool(pending)},

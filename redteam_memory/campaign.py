@@ -82,8 +82,8 @@ def create_reviewed_campaign(
         raise KeyError(f"unknown plan: {plan_id}")
     if plan["status"] != "approved":
         raise ValueError("campaign creation requires an approved plan")
-    if target_kind not in {"replay", "grayswan"}:
-        raise ValueError("target_kind must be replay or grayswan")
+    if target_kind not in {"replay", "grayswan", "pyrit-http"}:
+        raise ValueError("target_kind must be replay, grayswan, or pyrit-http")
     if not inputs:
         raise ValueError("at least one reviewed campaign input is required")
     step_ids = {str(step["id"]) for step in plan["steps"]}
@@ -147,7 +147,7 @@ async def run_campaign(
         raise KeyError(f"unknown plan: {campaign.plan_id}")
     if plan["status"] != "approved":
         raise ValueError("campaign execution requires a plan with status=approved")
-    if campaign.target_kind not in {"replay", "grayswan"}:
+    if campaign.target_kind not in {"replay", "grayswan", "pyrit-http"}:
         raise ValueError(f"unsupported campaign target kind: {campaign.target_kind}")
     step_by_id = {step["id"]: step for step in plan["steps"]}
     if len({item["step_id"] for item in inputs}) != len(inputs):
