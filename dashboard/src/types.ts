@@ -110,7 +110,7 @@ export interface CaseDetail extends CaseRow {
   turns: Array<{ turn_id: string; role: string; content: string; provenance: string; refusal: boolean }>;
   evidence: Array<{ evidence_id: string; kind: string; description: string; verified: boolean; source: string }>;
   plans: Array<{ plan_id: string; planner: string; status: string; hypotheses?: PlanHypothesis[]; steps: PlanStep[] }>;
-  campaigns: Array<{ campaign_id: string; target_kind: string; status: string; executed_turns: number; stop_reason: string }>;
+  campaigns: Array<{ campaign_id: string; target_kind: string; status: string; executed_turns: number; max_turns: number; stop_reason: string }>;
 }
 
 export interface MechanismRecommendation {
@@ -180,4 +180,9 @@ export interface ExecutionArtifacts {
 export interface CreatedCampaign {
   campaign: { campaign_id: string; status: string; target_kind: string; max_turns: number; max_seconds: number; max_cost: number | null };
   reviewed_input_count: number;
+}
+
+export interface ReplayCampaignResult {
+  campaign: { campaign_id: string; status: string; executed_turns: number; stop_reason: string };
+  results: Array<{ step_id: string; response: string; outcome: string }>;
 }

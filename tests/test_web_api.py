@@ -48,12 +48,17 @@ def test_task_workspace_creates_task_draft_and_observation(tmp_path):
     artifacts = client.get(f"/api/tasks/{case_id}/plans/{draft.json()['plan_id']}/artifacts")
     assert artifacts.json()["ready_for_campaign"] is True
     campaign = client.post(f"/api/tasks/{case_id}/plans/{draft.json()['plan_id']}/campaigns", json={
-        "target_kind": "replay", "max_turns": 1, "max_seconds": 30, "max_cost": 0,
+        "target_kind": "replay", "max_turns": 1, "max_seconds": 30, "max_cost": None,
         "inputs": [{"step_id": draft.json()["steps"][0]["id"], "input": "reviewed baseline"}],
     })
     assert campaign.status_code == 200
     assert campaign.json()["campaign"]["status"] == "pending"
     assert campaign.json()["reviewed_input_count"] == 1
+    replay = client.post(f"/api/tasks/{case_id}/campaigns/{campaign.json()['campaign']['campaign_id']}/replay", json={
+        "response_text": "local controlled response",
+    })
+    assert replay.status_code == 200
+    assert replay.json()["campaign"]["status"] == "completed"
     observation = client.post(f"/api/tasks/{case_id}/observation", json={
         "input_text": "baseline", "response_text": "observed response", "mechanism": "baseline",
         "outcome": "unknown", "observed_effect": "no external effect",

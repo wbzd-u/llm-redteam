@@ -2,7 +2,7 @@ import asyncio
 import json
 
 import redteam_memory.cli as cli_module
-from redteam_memory.campaign import create_campaign, create_reviewed_campaign, load_campaign_inputs, run_campaign
+from redteam_memory.campaign import create_campaign, create_reviewed_campaign, load_campaign_inputs, run_campaign, run_saved_replay_campaign
 from redteam_memory.models import Case, ResearchPlan
 from redteam_memory.store import MemoryStore
 from redteam_memory.targets import ReplayTarget, TargetResponse
@@ -91,3 +91,16 @@ def test_reviewed_campaign_persists_local_inputs_without_execution(tmp_path):
         inputs = store.list_campaign_inputs(campaign.campaign_id)
     assert campaign.status == "pending"
     assert inputs[0]["input_text"] == "reviewed local test"
+
+
+def test_saved_replay_campaign_uses_only_local_reviewed_inputs(tmp_path):
+    with MemoryStore(tmp_path / "memory.sqlite3") as store:
+        case = store.save_case(Case(title="local replay", challenge="brief"))
+        plan = _approved_plan(store, case.case_id)
+        campaign = create_reviewed_campaign(
+            store, plan_id=plan.plan_id, target_kind="replay", max_turns=1,
+            max_seconds=60, max_cost=None, inputs=[{"step_id": "s1", "input": "reviewed"}],
+        )
+        result = asyncio.run(run_saved_replay_campaign(store, campaign_id=campaign.campaign_id, response="local response"))
+    assert result["campaign"]["status"] == "completed"
+    assert result["results"][0]["response"] == "local response"

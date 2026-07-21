@@ -12,7 +12,7 @@ from .models import Campaign, CampaignInput, utc_now
 from .runner import run_once
 from .state import derive_stage
 from .store import MemoryStore
-from .targets import AsyncTarget
+from .targets import AsyncTarget, ReplayTarget
 
 
 CAMPAIGN_TERMINAL = {"completed", "confirmed", "budget_exhausted", "failed", "halted"}
@@ -104,6 +104,29 @@ def create_reviewed_campaign(
             review_note=str(item.get("review_note", "")).strip(),
         ))
     return campaign
+
+
+async def run_saved_replay_campaign(
+    store: MemoryStore,
+    *,
+    campaign_id: str,
+    response: str,
+) -> dict[str, Any]:
+    """Execute reviewed inputs only against the local deterministic Replay target."""
+    record = store.get_campaign(campaign_id)
+    if record is None:
+        raise KeyError(f"unknown campaign: {campaign_id}")
+    if record["target_kind"] != "replay":
+        raise ValueError("saved replay runner requires target_kind=replay")
+    inputs = [
+        {"step_id": str(item["step_id"]), "input": str(item["input_text"])}
+        for item in store.list_campaign_inputs(campaign_id)
+    ]
+    if not inputs:
+        raise ValueError("campaign has no reviewed inputs")
+    return await run_campaign(
+        store, campaign_id=campaign_id, target=ReplayTarget(response), inputs=inputs,
+    )
 
 
 async def run_campaign(

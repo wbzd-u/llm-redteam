@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +10,7 @@ from .mechanisms import recommend_mechanisms
 from .models import Attempt, Case, ChallengeIntake, Evidence, Turn
 from .planner import build_hypothesis_matrix, deterministic_draft
 from .execution_artifacts import compile_execution_artifacts
-from .campaign import create_reviewed_campaign
+from .campaign import create_reviewed_campaign, run_saved_replay_campaign
 from .research import case_rows, paper_packet, research_cross_tabs, research_summary
 from .state import recommend_next
 from .store import MemoryStore
@@ -172,6 +173,22 @@ def create_app(db_path: str | Path):
         except HTTPException:
             raise
         except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.post("/api/tasks/{case_id}/campaigns/{campaign_id}/replay")
+    def run_task_replay_campaign(case_id: str, campaign_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        response = str(payload.get("response_text", "")).strip()
+        if not response:
+            raise HTTPException(status_code=422, detail="response_text is required for local replay")
+        try:
+            with with_store() as store:
+                campaign = store.get_campaign(campaign_id)
+                if campaign is None or campaign.get("case_id") != case_id:
+                    raise HTTPException(status_code=404, detail="unknown task campaign")
+                return asyncio.run(run_saved_replay_campaign(store, campaign_id=campaign_id, response=response))
+        except HTTPException:
+            raise
+        except (KeyError, RuntimeError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.post("/api/tasks/{case_id}/observation")
