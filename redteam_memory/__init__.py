@@ -10,6 +10,7 @@ from .campaign import create_campaign, create_reviewed_campaign, load_campaign_i
 from .execution_artifacts import compile_execution_artifacts
 from .executor_profiles import normalize_pyrit_profile, pyrit_readiness
 from .campaign_exports import build_campaign_manifest
+from .external_results import import_campaign_results, load_result_package
 from .research import paper_packet, research_cross_tabs, research_summary, write_case_csv, write_paper_packet, write_summary_json, write_summary_svg
 from .web_api import create_app
 from .defense import coverage_matrix, observation_verdict, regression_gate
@@ -55,6 +56,8 @@ __all__ = [
     "normalize_pyrit_profile",
     "pyrit_readiness",
     "build_campaign_manifest",
+    "import_campaign_results",
+    "load_result_package",
     "build_planner_brief",
     "deterministic_draft",
     "load_inspect_samples",

@@ -13,6 +13,7 @@ from .execution_artifacts import compile_execution_artifacts
 from .campaign import create_reviewed_campaign, run_saved_replay_campaign
 from .executor_profiles import normalize_pyrit_profile, pyrit_readiness
 from .campaign_exports import build_campaign_manifest
+from .external_results import import_campaign_results
 from .research import case_rows, paper_packet, research_cross_tabs, research_summary
 from .state import recommend_next
 from .store import MemoryStore
@@ -226,6 +227,25 @@ def create_app(db_path: str | Path):
                 if campaign is None or campaign.get("case_id") != case_id:
                     raise HTTPException(status_code=404, detail="unknown task campaign")
                 return build_campaign_manifest(store, campaign_id, format=format)
+        except HTTPException:
+            raise
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.post("/api/tasks/{case_id}/campaigns/{campaign_id}/results")
+    def import_task_campaign_results(case_id: str, campaign_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        results = payload.get("results", [])
+        if not isinstance(results, list) or not all(isinstance(item, dict) for item in results):
+            raise HTTPException(status_code=422, detail="results must be a list of objects")
+        try:
+            with with_store() as store:
+                campaign = store.get_campaign(campaign_id)
+                if campaign is None or campaign.get("case_id") != case_id:
+                    raise HTTPException(status_code=404, detail="unknown task campaign")
+                return import_campaign_results(
+                    store, campaign_id=campaign_id,
+                    source=str(payload.get("source", "manual")).strip() or "manual", results=results,
+                )
         except HTTPException:
             raise
         except (KeyError, ValueError) as exc:

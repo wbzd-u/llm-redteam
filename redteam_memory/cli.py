@@ -20,6 +20,7 @@ from .analysis_export import case_markdown, write_attempt_csv
 from .llm_provider import OpenAICompatiblePlanner, ProviderError
 from .campaign import create_campaign, load_campaign_inputs, run_campaign
 from .campaign_exports import build_campaign_manifest
+from .external_results import import_campaign_results, load_result_package
 from .research import CHART_METRICS, research_summary, write_case_csv, write_paper_packet, write_summary_json, write_summary_svg
 from .ipi_import import import_ipi_dataset
 from .jailbreaker_adapter import JailbreakerCEAdapter
@@ -166,6 +167,10 @@ def build_parser() -> argparse.ArgumentParser:
     campaign_export.add_argument("--campaign-id", required=True)
     campaign_export.add_argument("--format", choices=["inspect", "promptfoo"], required=True)
     campaign_export.add_argument("--out", required=True)
+    campaign_import_results = campaign_sub.add_parser("import-results", help="import normalized Inspect, Promptfoo, or manual results")
+    campaign_import_results.add_argument("--campaign-id", required=True)
+    campaign_import_results.add_argument("--source", choices=["inspect", "promptfoo", "manual"], required=True)
+    campaign_import_results.add_argument("--file", required=True)
     campaign_replay = campaign_sub.add_parser("replay", help="run supplied approved inputs through an offline Replay target")
     campaign_replay.add_argument("--campaign-id", required=True)
     campaign_replay.add_argument("--inputs-file", required=True)
@@ -597,6 +602,12 @@ def main(argv: list[str] | None = None) -> None:
                         "format": args.format, "campaign_id": args.campaign_id,
                         "path": str(destination), "executed": False,
                     })
+                    return
+                if args.campaign_command == "import-results":
+                    _json(import_campaign_results(
+                        store, campaign_id=args.campaign_id, source=args.source,
+                        results=load_result_package(args.file),
+                    ))
                     return
                 if args.campaign_command == "replay":
                     inputs = load_campaign_inputs(args.inputs_file)

@@ -77,6 +77,14 @@ def test_task_workspace_creates_task_draft_and_observation(tmp_path):
     promptfoo_manifest = client.get(f"/api/tasks/{case_id}/campaigns/{campaign.json()['campaign']['campaign_id']}/export/promptfoo")
     assert inspect_manifest.json()["task"]["scorer"] is None
     assert promptfoo_manifest.json()["providers"] == []
+    imported = client.post(f"/api/tasks/{case_id}/campaigns/{pyrit_campaign.json()['campaign']['campaign_id']}/results", json={
+        "source": "promptfoo", "results": [{
+            "step_id": draft.json()["steps"][0]["id"], "outcome": "no_change",
+            "response": "provider response", "observed_effect": "no state change",
+        }],
+    })
+    assert imported.status_code == 200
+    assert imported.json()["source"] == "promptfoo"
     observation = client.post(f"/api/tasks/{case_id}/observation", json={
         "input_text": "baseline", "response_text": "observed response", "mechanism": "baseline",
         "outcome": "unknown", "observed_effect": "no external effect",
