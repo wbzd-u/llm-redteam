@@ -6,6 +6,12 @@
 - Inspect AI：固定 Campaign 样本与实验条件；
 - Promptfoo：把 Campaign 变成版本回归配置。
 
+## 可选 LLM 规划器
+
+任务工作台可以保存 OpenAI-compatible endpoint、模型名和 API Key 环境变量名。配置检查默认不联网、不读取密钥。只有点击“明确联网并生成审核草稿”时，后端才从指定环境变量临时读取密钥并请求模型。
+
+LLM 只能输出满足固定 schema 的草稿：机制假设、依据、控制变量、预期信号、停止条件和 `approval_required=true` 的步骤。草稿不会自动批准、创建 Campaign 或执行目标。
+
 ## PyRIT Campaign
 
 先执行 dry-run。此命令不会读取请求文件，也不会发送网络请求：

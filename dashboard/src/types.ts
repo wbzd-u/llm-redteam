@@ -106,7 +106,7 @@ export interface PaperPacket {
 export interface CaseDetail extends CaseRow {
   challenge: string;
   notes: string;
-  intake: { authorization_scope?: string; success_criteria?: string[]; constraints?: string[] } | null;
+  intake: { authorization_scope?: string; success_criteria?: string[]; constraints?: string[]; target_config?: { planner_profile?: Partial<PlannerProfile> } } | null;
   turns: Array<{ turn_id: string; role: string; content: string; provenance: string; refusal: boolean }>;
   evidence: Array<{ evidence_id: string; kind: string; description: string; verified: boolean; source: string }>;
   plans: Array<{ plan_id: string; planner: string; status: string; hypotheses?: PlanHypothesis[]; steps: PlanStep[] }>;
@@ -149,6 +149,13 @@ export interface PyRITProfile {
   timeout: number;
   captured_request_reviewed: boolean;
   credentials_managed_externally: boolean;
+}
+
+export interface PlannerProfile {
+  endpoint: string;
+  model: string;
+  api_key_env: string;
+  timeout: number;
 }
 
 export interface PyRITReadiness {

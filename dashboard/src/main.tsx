@@ -20,7 +20,7 @@ import ScienceRoundedIcon from "@mui/icons-material/ScienceRounded";
 import { BarChart } from "@mui/x-charts/BarChart";
 import { api } from "./api";
 import { theme } from "./theme";
-import type { CaseDetail, CaseRow, ExecutionArtifacts, Overview, PaperPacket, PyRITProfile, ResearchSummary, TaskWorkspace } from "./types";
+import type { CaseDetail, CaseRow, ExecutionArtifacts, Overview, PaperPacket, PlannerProfile, PyRITProfile, ResearchSummary, TaskWorkspace } from "./types";
 
 const drawerWidth = 256;
 type Page = "home" | "cases" | "experience" | "research";
@@ -234,6 +234,13 @@ function TaskWorkspacePage({ workspace, close, refresh }: { workspace: TaskWorks
     captured_request_reviewed: workspace.pyrit_readiness.profile.captured_request_reviewed ?? false,
     credentials_managed_externally: workspace.pyrit_readiness.profile.credentials_managed_externally ?? true,
   });
+  const storedPlanner = task.intake?.target_config?.planner_profile;
+  const [plannerProfile, setPlannerProfile] = useState<Partial<PlannerProfile>>({
+    endpoint: storedPlanner?.endpoint ?? "",
+    model: storedPlanner?.model ?? "",
+    api_key_env: storedPlanner?.api_key_env ?? "OPENAI_API_KEY",
+    timeout: storedPlanner?.timeout ?? 60,
+  });
   const [inputText, setInputText] = useState("");
   const [responseText, setResponseText] = useState("");
   const [mechanism, setMechanism] = useState(mechanisms[0]?.mechanism.name ?? "baseline");
@@ -249,8 +256,10 @@ function TaskWorkspacePage({ workspace, close, refresh }: { workspace: TaskWorks
   const runLocalReplay = async (campaignId: string) => { if (!replayResponse.trim()) { setNotice("请先填写本地模拟响应。 "); return; } setSaving(true); try { const result = await api.runTaskReplayCampaign(task.case_id, campaignId, replayResponse); setNotice(`本地 Replay 已完成：${result.campaign.executed_turns} 轮，状态为 ${result.campaign.status}。未连接外部目标。 `); await refresh(); } catch (error) { setNotice(error instanceof Error ? error.message : "本地 Replay 运行失败"); } finally { setSaving(false); } };
   const savePyritProfile = async () => { setSaving(true); try { const readiness = await api.savePyritProfile(task.case_id, pyritProfile); setNotice(readiness.ready ? "PyRIT 执行前检查已就绪；真实执行仍需在本地 CLI 显式确认。 " : "PyRIT 配置已保存；请补齐未完成的执行前检查。 "); await refresh(); } catch (error) { setNotice(error instanceof Error ? error.message : "保存 PyRIT 配置失败"); } finally { setSaving(false); } };
   const downloadCampaignManifest = async (campaignId: string, format: "inspect" | "promptfoo") => { setSaving(true); try { const manifest = await api.campaignManifest(task.case_id, campaignId, format); downloadText(`${task.case_id}-${campaignId}.${format}.json`, JSON.stringify(manifest, null, 2), "application/json;charset=utf-8"); setNotice(`已下载 ${format === "inspect" ? "Inspect AI" : "Promptfoo"} 实验工件；其中不含 provider、凭据或自动成功判定。 `); } catch (error) { setNotice(error instanceof Error ? error.message : "导出实验工件失败"); } finally { setSaving(false); } };
+  const runPlanner = async (execute: boolean) => { setSaving(true); try { await api.savePlannerProfile(task.case_id, plannerProfile); const result = await api.generateLlmPlan(task.case_id, execute); setNotice(execute ? "LLM 已生成一份待人工审核的实验草稿；它尚未批准或执行。 " : `规划器检查通过：不会联网，也未读取 ${plannerProfile.api_key_env || "API key"}。 `); if (execute) await refresh(); void result; } catch (error) { setNotice(error instanceof Error ? error.message : "LLM 规划器运行失败"); } finally { setSaving(false); } };
   const saveObservation = async () => { if (!responseText.trim()) { setNotice("请先记录本轮观察到的响应。 "); return; } setSaving(true); try { await api.addObservation(task.case_id, { input_text: inputText, response_text: responseText, mechanism, outcome, observed_effect: effect, refusal, evidence_description: evidenceDescription, evidence_verified: evidenceVerified }); setNotice("这一轮观察已记录，下一步建议已更新。 "); setInputText(""); setResponseText(""); setEffect(""); setEvidenceDescription(""); setRefusal(false); setEvidenceVerified(false); await refresh(); } catch (error) { setNotice(error instanceof Error ? error.message : "保存观察失败"); } finally { setSaving(false); } };
   const draft = task.plans[0] ?? workspace.suggested_plan;
+  const plannerPanel = <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 } }}><Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1}><Box><Typography variant="h5">可选 LLM 机制规划器</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>只根据当前题目、机制卡、失败记录和证据提出待审核实验草稿；不会生成 Campaign，也不会自动执行。</Typography></Box><Chip label="人工审核前置" variant="outlined" /></Stack><Grid container spacing={1.25} sx={{ mt: 1 }}><Grid size={{ xs: 12, md: 6 }}><TextField label="OpenAI-compatible endpoint" value={plannerProfile.endpoint ?? ""} onChange={(event) => setPlannerProfile((current) => ({ ...current, endpoint: event.target.value }))} fullWidth /></Grid><Grid size={{ xs: 12, md: 3 }}><TextField label="模型" value={plannerProfile.model ?? ""} onChange={(event) => setPlannerProfile((current) => ({ ...current, model: event.target.value }))} fullWidth /></Grid><Grid size={{ xs: 12, md: 3 }}><TextField label="API Key 环境变量名" value={plannerProfile.api_key_env ?? "OPENAI_API_KEY"} onChange={(event) => setPlannerProfile((current) => ({ ...current, api_key_env: event.target.value }))} fullWidth /></Grid><Grid size={{ xs: 12 }}><Stack direction={{ xs: "column", sm: "row" }} gap={1}><Button variant="outlined" disabled={saving} onClick={() => void runPlanner(false)}>仅检查配置（不联网）</Button><Button variant="contained" color="secondary" disabled={saving || Boolean(task.plans.length)} onClick={() => void runPlanner(true)}>明确联网并生成审核草稿</Button></Stack><Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>密钥只在后端执行瞬间从指定环境变量读取，不保存到工作区。已有计划时请先继续审核现有计划，避免静默覆盖。</Typography></Grid></Grid></Paper>;
   const artifactPanel = task.plans[0]?.status === "approved" ? <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 }, borderLeft: 4, borderLeftColor: "success.main" }}>
     <Stack direction={{ xs: "column", md: "row" }} alignItems={{ md: "center" }} justifyContent="space-between" gap={1} sx={{ mb: 1.5 }}><Box><Typography variant="caption" color="text.secondary">本次 Campaign 执行器</Typography><Typography variant="body2">Replay 用于离线验证；PyRIT HTTP 用于后续在本地 CLI 显式连接授权目标。</Typography></Box><ToggleButtonGroup size="small" exclusive value={campaignTargetKind} onChange={(_, value) => value && setCampaignTargetKind(value)}><ToggleButton value="replay">本地 Replay</ToggleButton><ToggleButton value="pyrit-http">PyRIT HTTP</ToggleButton></ToggleButtonGroup></Stack>
     <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1.5}><Box><Typography variant="h5">执行工件预览</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>这是把已批准计划交给不同执行工具前的共同契约。它不会自动发送请求，也不包含任何真实输入。</Typography></Box><Button variant="contained" disabled={saving} onClick={() => void previewArtifacts(task.plans[0].plan_id)}>查看执行工件</Button></Stack>
@@ -271,6 +280,7 @@ function TaskWorkspacePage({ workspace, close, refresh }: { workspace: TaskWorks
   </Paper> : null;
   return <Stack spacing={3}>
     {artifactPanel}
+    {plannerPanel}
     <Button startIcon={<ArrowBackRoundedIcon />} onClick={close} sx={{ alignSelf: "flex-start" }}>返回任务列表</Button>
     <Stack direction={{ xs: "column", lg: "row" }} justifyContent="space-between" gap={2}><Box><Typography variant="overline" color="primary.main" fontWeight={700}>任务控制台</Typography><Typography variant="h4">{task.title}</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>{task.target || "目标尚未记录"} · {task.carrier || "文本载体"}</Typography></Box><Paper variant="outlined" sx={{ p: 1.75, minWidth: { lg: 330 }, borderLeft: 4, borderLeftColor: "primary.main" }}><Typography variant="caption" color="text.secondary">系统建议的下一步</Typography><Typography fontWeight={700} sx={{ mt: 0.35 }}>{nextAction.action}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{nextAction.rationale}</Typography></Paper></Stack>
     {notice && <Alert severity={notice.includes("失败") || notice.includes("请先") ? "warning" : "success"} onClose={() => setNotice(null)}>{notice}</Alert>}

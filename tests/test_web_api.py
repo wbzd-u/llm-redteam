@@ -41,6 +41,13 @@ def test_task_workspace_creates_task_draft_and_observation(tmp_path):
     workspace = client.get(f"/api/tasks/{case_id}/workspace")
     assert workspace.status_code == 200
     assert workspace.json()["next_action"]["action"] == "run_clean_baseline"
+    planner_profile = client.post(f"/api/tasks/{case_id}/planner-profile", json={
+        "endpoint": "http://local.test/v1/chat/completions", "model": "planner-test",
+        "api_key_env": "MISSING_PLANNER_KEY", "timeout": 30,
+    })
+    assert planner_profile.status_code == 200
+    planner_dry_run = client.post(f"/api/tasks/{case_id}/plan/llm-generate", json={"execute": False})
+    assert planner_dry_run.json()["credentials_loaded"] is False
     draft = client.post(f"/api/tasks/{case_id}/plan/draft")
     assert draft.status_code == 200
     approved = client.post(f"/api/tasks/{case_id}/plans/{draft.json()['plan_id']}/approve")

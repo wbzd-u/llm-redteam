@@ -14,6 +14,7 @@ from .campaign import create_reviewed_campaign, run_saved_replay_campaign
 from .executor_profiles import normalize_pyrit_profile, pyrit_readiness
 from .campaign_exports import build_campaign_manifest
 from .external_results import import_campaign_results
+from .llm_planning import generate_reviewable_llm_plan, normalize_planner_profile
 from .research import case_rows, paper_packet, research_cross_tabs, research_summary
 from .state import recommend_next
 from .store import MemoryStore
@@ -125,6 +126,39 @@ def create_app(db_path: str | Path):
             if store.get_case(case_id) is None:
                 raise HTTPException(status_code=404, detail="unknown task")
             return store.save_research_plan(deterministic_draft(store, case_id)).to_dict()
+
+    @app.post("/api/tasks/{case_id}/planner-profile")
+    def save_task_planner_profile(case_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            profile = normalize_planner_profile(payload)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        with with_store() as store:
+            intake = store.get_challenge_intake(case_id)
+            if intake is None:
+                raise HTTPException(status_code=404, detail="unknown task")
+            target_config = dict(intake.get("target_config", {}))
+            target_config["planner_profile"] = profile
+            store.save_challenge_intake(ChallengeIntake(
+                case_id=case_id, authorization_scope=str(intake.get("authorization_scope", "")),
+                success_criteria=list(intake.get("success_criteria", [])), constraints=list(intake.get("constraints", [])),
+                target_config=target_config, source=str(intake.get("source", "dashboard")),
+                intake_id=str(intake.get("intake_id", "")), created_at=str(intake.get("created_at", "")),
+            ))
+            return {"profile": profile, "credentials_loaded": False}
+
+    @app.post("/api/tasks/{case_id}/plan/llm-generate")
+    def generate_task_llm_plan(case_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        execute = bool(payload.get("execute", False))
+        with with_store() as store:
+            intake = store.get_challenge_intake(case_id)
+            if intake is None:
+                raise HTTPException(status_code=404, detail="unknown task")
+            profile = dict((intake.get("target_config") or {}).get("planner_profile", {}))
+            try:
+                return generate_reviewable_llm_plan(store, case_id=case_id, profile=profile, execute=execute)
+            except (KeyError, ValueError, RuntimeError) as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.post("/api/tasks/{case_id}/pyrit-profile")
     def save_task_pyrit_profile(case_id: str, payload: dict[str, Any]) -> dict[str, Any]:

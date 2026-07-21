@@ -1,4 +1,4 @@
-import type { CampaignManifest, CaseDetail, CaseRow, CreatedCampaign, ExecutionArtifacts, Overview, PaperPacket, PyRITProfile, PyRITReadiness, ReplayCampaignResult, ResearchSummary, TaskWorkspace } from "./types";
+import type { CampaignManifest, CaseDetail, CaseRow, CreatedCampaign, ExecutionArtifacts, Overview, PaperPacket, PlannerProfile, PyRITProfile, PyRITReadiness, ReplayCampaignResult, ResearchSummary, TaskWorkspace } from "./types";
 
 const baseUrl = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8787";
 const sourceQuery = (source: string) => source === "all" ? "" : `?source=${encodeURIComponent(source)}`;
@@ -25,6 +25,8 @@ export const api = {
   createTask: (payload: unknown) => post<{ case_id: string }>("/api/tasks", payload),
   createTaskDraft: (caseId: string) => post(`/api/tasks/${encodeURIComponent(caseId)}/plan/draft`, {}),
   savePyritProfile: (caseId: string, profile: Partial<PyRITProfile>) => post<PyRITReadiness>(`/api/tasks/${encodeURIComponent(caseId)}/pyrit-profile`, profile),
+  savePlannerProfile: (caseId: string, profile: Partial<PlannerProfile>) => post<{ profile: PlannerProfile; credentials_loaded: boolean }>(`/api/tasks/${encodeURIComponent(caseId)}/planner-profile`, profile),
+  generateLlmPlan: (caseId: string, execute: boolean) => post<Record<string, unknown>>(`/api/tasks/${encodeURIComponent(caseId)}/plan/llm-generate`, { execute }),
   approveTaskPlan: (caseId: string, planId: string) => post(`/api/tasks/${encodeURIComponent(caseId)}/plans/${encodeURIComponent(planId)}/approve`, {}),
   executionArtifacts: (caseId: string, planId: string) => get<ExecutionArtifacts>(`/api/tasks/${encodeURIComponent(caseId)}/plans/${encodeURIComponent(planId)}/artifacts`),
   createTaskCampaign: (caseId: string, planId: string, payload: unknown) => post<CreatedCampaign>(`/api/tasks/${encodeURIComponent(caseId)}/plans/${encodeURIComponent(planId)}/campaigns`, payload),
