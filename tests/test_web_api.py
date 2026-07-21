@@ -59,6 +59,14 @@ def test_task_workspace_creates_task_draft_and_observation(tmp_path):
     })
     assert replay.status_code == 200
     assert replay.json()["campaign"]["status"] == "completed"
+    pyrit_profile = client.post(f"/api/tasks/{case_id}/pyrit-profile", json={
+        "profile_name": "local browser capture", "request_reference": "captured locally",
+        "placeholder": "{PROMPT}", "response_key": "", "prompt_encoding": "json",
+        "timeout": 30, "captured_request_reviewed": True,
+        "credentials_managed_externally": True,
+    })
+    assert pyrit_profile.status_code == 200
+    assert pyrit_profile.json()["profile"]["request_reference"] == "captured locally"
     observation = client.post(f"/api/tasks/{case_id}/observation", json={
         "input_text": "baseline", "response_text": "observed response", "mechanism": "baseline",
         "outcome": "unknown", "observed_effect": "no external effect",

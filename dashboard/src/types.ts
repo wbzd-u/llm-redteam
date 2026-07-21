@@ -134,8 +134,30 @@ export interface TaskWorkspace {
   recommended_mechanisms: MechanismRecommendation[];
   hypothesis_matrix: { method: string; hypotheses: ResearchHypothesis[] };
   execution_readiness: { state: string; ready: boolean; message: string; steps: Array<{ id: string; objective: string; variables: Record<string, string>; approval_required: boolean }> };
+  pyrit_readiness: PyRITReadiness;
   next_action: { action: string; mechanism: string; rationale: string; confidence: string; requires_human_review: boolean; stage: string };
   suggested_plan: { plan_id: string; hypotheses: PlanHypothesis[]; steps: PlanStep[]; notes: string } | null;
+}
+
+export interface PyRITProfile {
+  profile_name: string;
+  request_reference: string;
+  placeholder: string;
+  response_key: string;
+  prompt_encoding: string;
+  model_name: string;
+  timeout: number;
+  captured_request_reviewed: boolean;
+  credentials_managed_externally: boolean;
+}
+
+export interface PyRITReadiness {
+  profile: Partial<PyRITProfile>;
+  ready: boolean;
+  checks: Array<{ id: string; label: string; ready: boolean }>;
+  approved_plan_id: string | null;
+  pending_campaign_count: number;
+  handoff: { runner: string; request_template: string; headers: string; placeholder: string; response_key: string; network_execution: string };
 }
 
 export interface ResearchHypothesis extends PlanHypothesis {

@@ -11,6 +11,7 @@ from .models import Attempt, Case, ChallengeIntake, Evidence, Turn
 from .planner import build_hypothesis_matrix, deterministic_draft
 from .execution_artifacts import compile_execution_artifacts
 from .campaign import create_reviewed_campaign, run_saved_replay_campaign
+from .executor_profiles import normalize_pyrit_profile, pyrit_readiness
 from .research import case_rows, paper_packet, research_cross_tabs, research_summary
 from .state import recommend_next
 from .store import MemoryStore
@@ -87,6 +88,7 @@ def create_app(db_path: str | Path):
                     ),
                     "steps": [{"id": step.get("id"), "objective": step.get("objective"), "variables": step.get("variables", {}), "approval_required": bool(step.get("approval_required"))} for step in (active_plan or {}).get("steps", [])],
                 },
+                "pyrit_readiness": pyrit_readiness(store, case_id),
             }
 
     @app.post("/api/tasks")
@@ -121,6 +123,30 @@ def create_app(db_path: str | Path):
             if store.get_case(case_id) is None:
                 raise HTTPException(status_code=404, detail="unknown task")
             return store.save_research_plan(deterministic_draft(store, case_id)).to_dict()
+
+    @app.post("/api/tasks/{case_id}/pyrit-profile")
+    def save_task_pyrit_profile(case_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            profile = normalize_pyrit_profile(payload)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        with with_store() as store:
+            intake = store.get_challenge_intake(case_id)
+            if intake is None:
+                raise HTTPException(status_code=404, detail="unknown task")
+            target_config = dict(intake.get("target_config", {}))
+            target_config["pyrit_profile"] = profile
+            store.save_challenge_intake(ChallengeIntake(
+                case_id=case_id,
+                authorization_scope=str(intake.get("authorization_scope", "")),
+                success_criteria=list(intake.get("success_criteria", [])),
+                constraints=list(intake.get("constraints", [])),
+                target_config=target_config,
+                source=str(intake.get("source", "dashboard")),
+                intake_id=str(intake.get("intake_id", "")),
+                created_at=str(intake.get("created_at", "")),
+            ))
+            return pyrit_readiness(store, case_id)
 
     @app.post("/api/tasks/{case_id}/plans/{plan_id}/approve")
     def approve_task_plan(case_id: str, plan_id: str) -> dict[str, Any]:
