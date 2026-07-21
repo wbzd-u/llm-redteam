@@ -8,6 +8,7 @@ from typing import Any
 from .mechanisms import recommend_mechanisms
 from .models import Attempt, Case, ChallengeIntake, Evidence, Turn
 from .planner import build_hypothesis_matrix, deterministic_draft
+from .execution_artifacts import compile_execution_artifacts
 from .research import case_rows, paper_packet, research_cross_tabs, research_summary
 from .state import recommend_next
 from .store import MemoryStore
@@ -126,6 +127,14 @@ def create_app(db_path: str | Path):
             if plan is None or plan.get("case_id") != case_id:
                 raise HTTPException(status_code=404, detail="unknown task plan")
             return store.set_research_plan_status(plan_id, "approved")
+
+    @app.get("/api/tasks/{case_id}/plans/{plan_id}/artifacts")
+    def task_plan_artifacts(case_id: str, plan_id: str) -> dict[str, Any]:
+        with with_store() as store:
+            plan = store.get_research_plan(plan_id)
+            if plan is None or plan.get("case_id") != case_id:
+                raise HTTPException(status_code=404, detail="unknown task plan")
+            return compile_execution_artifacts(store, plan_id)
 
     @app.post("/api/tasks/{case_id}/observation")
     def add_task_observation(case_id: str, payload: dict[str, Any]) -> dict[str, Any]:

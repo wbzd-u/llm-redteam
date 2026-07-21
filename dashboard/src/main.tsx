@@ -20,7 +20,7 @@ import ScienceRoundedIcon from "@mui/icons-material/ScienceRounded";
 import { BarChart } from "@mui/x-charts/BarChart";
 import { api } from "./api";
 import { theme } from "./theme";
-import type { CaseDetail, CaseRow, Overview, PaperPacket, ResearchSummary, TaskWorkspace } from "./types";
+import type { CaseDetail, CaseRow, ExecutionArtifacts, Overview, PaperPacket, ResearchSummary, TaskWorkspace } from "./types";
 
 const drawerWidth = 256;
 type Page = "home" | "cases" | "experience" | "research";
@@ -215,6 +215,7 @@ function TaskWorkspacePage({ workspace, close, refresh }: { workspace: TaskWorks
   const { task, recommended_mechanisms: mechanisms, next_action: nextAction } = workspace;
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [artifacts, setArtifacts] = useState<ExecutionArtifacts | null>(null);
   const [inputText, setInputText] = useState("");
   const [responseText, setResponseText] = useState("");
   const [mechanism, setMechanism] = useState(mechanisms[0]?.mechanism.name ?? "baseline");
@@ -225,9 +226,21 @@ function TaskWorkspacePage({ workspace, close, refresh }: { workspace: TaskWorks
   const [evidenceVerified, setEvidenceVerified] = useState(false);
   const saveDraft = async () => { setSaving(true); try { await api.createTaskDraft(task.case_id); setNotice("已生成一份待审核的实验草稿。它不会自动执行。 "); await refresh(); } catch (error) { setNotice(error instanceof Error ? error.message : "生成草稿失败"); } finally { setSaving(false); } };
   const approveDraft = async (planId: string) => { setSaving(true); try { await api.approveTaskPlan(task.case_id, planId); setNotice("计划已批准。下一步可为每个步骤准备经审核的输入，再交给执行器。 "); await refresh(); } catch (error) { setNotice(error instanceof Error ? error.message : "批准计划失败"); } finally { setSaving(false); } };
+  const previewArtifacts = async (planId: string) => { setSaving(true); try { setArtifacts(await api.executionArtifacts(task.case_id, planId)); setNotice("已生成执行工件预览：所有输入仍为空，等待你逐步审核填写。 "); } catch (error) { setNotice(error instanceof Error ? error.message : "无法生成执行工件"); } finally { setSaving(false); } };
   const saveObservation = async () => { if (!responseText.trim()) { setNotice("请先记录本轮观察到的响应。 "); return; } setSaving(true); try { await api.addObservation(task.case_id, { input_text: inputText, response_text: responseText, mechanism, outcome, observed_effect: effect, refusal, evidence_description: evidenceDescription, evidence_verified: evidenceVerified }); setNotice("这一轮观察已记录，下一步建议已更新。 "); setInputText(""); setResponseText(""); setEffect(""); setEvidenceDescription(""); setRefusal(false); setEvidenceVerified(false); await refresh(); } catch (error) { setNotice(error instanceof Error ? error.message : "保存观察失败"); } finally { setSaving(false); } };
   const draft = task.plans[0] ?? workspace.suggested_plan;
+  const artifactPanel = task.plans[0]?.status === "approved" ? <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 }, borderLeft: 4, borderLeftColor: "success.main" }}>
+    <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1.5}><Box><Typography variant="h5">执行工件预览</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>这是把已批准计划交给不同执行工具前的共同契约。它不会自动发送请求，也不包含任何真实输入。</Typography></Box><Button variant="contained" disabled={saving} onClick={() => void previewArtifacts(task.plans[0].plan_id)}>查看执行工件</Button></Stack>
+    {artifacts && <Grid container spacing={2} sx={{ mt: 1 }}>
+      <Grid size={{ xs: 12, md: 6, xl: 3 }}><Paper variant="outlined" sx={{ p: 1.75, height: "100%" }}><Typography fontWeight={700}>离线重放</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>共 {artifacts.replay.inputs.length} 个步骤；每一步输入均待人工审核。</Typography><Typography variant="caption" color="primary.main" sx={{ display: "block", mt: 1 }}>用于本地复盘与最小化复现</Typography></Paper></Grid>
+      <Grid size={{ xs: 12, md: 6, xl: 3 }}><Paper variant="outlined" sx={{ p: 1.75, height: "100%" }}><Typography fontWeight={700}>PyRIT 执行契约</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>在连接前还需要：{artifacts.pyrit.required_local_configuration.join("、")}。</Typography><Typography variant="caption" color="primary.main" sx={{ display: "block", mt: 1 }}>用于受预算控制的已授权目标测试</Typography></Paper></Grid>
+      <Grid size={{ xs: 12, md: 6, xl: 3 }}><Paper variant="outlined" sx={{ p: 1.75, height: "100%" }}><Typography fontWeight={700}>Inspect AI 实验样本</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>{artifacts.inspect.samples.length} 个样本槽位，输入均为空。</Typography><Typography variant="caption" color="primary.main" sx={{ display: "block", mt: 1 }}>用于固定条件、可重复的实验</Typography></Paper></Grid>
+      <Grid size={{ xs: 12, md: 6, xl: 3 }}><Paper variant="outlined" sx={{ p: 1.75, height: "100%" }}><Typography fontWeight={700}>Promptfoo 回归清单</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>{artifacts.promptfoo.tests.length} 条待配置测试；模型连接与提示均未填写。</Typography><Typography variant="caption" color="primary.main" sx={{ display: "block", mt: 1 }}>用于版本对比与回归检查</Typography></Paper></Grid>
+      <Grid size={{ xs: 12 }}><Alert severity="info">下一步是：为某一个步骤填写并审核测试输入、设定轮数、时间和成本上限，再创建待执行 Campaign。当前页面不会自动运行。</Alert></Grid>
+    </Grid>}
+  </Paper> : null;
   return <Stack spacing={3}>
+    {artifactPanel}
     <Button startIcon={<ArrowBackRoundedIcon />} onClick={close} sx={{ alignSelf: "flex-start" }}>返回任务列表</Button>
     <Stack direction={{ xs: "column", lg: "row" }} justifyContent="space-between" gap={2}><Box><Typography variant="overline" color="primary.main" fontWeight={700}>任务控制台</Typography><Typography variant="h4">{task.title}</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>{task.target || "目标尚未记录"} · {task.carrier || "文本载体"}</Typography></Box><Paper variant="outlined" sx={{ p: 1.75, minWidth: { lg: 330 }, borderLeft: 4, borderLeftColor: "primary.main" }}><Typography variant="caption" color="text.secondary">系统建议的下一步</Typography><Typography fontWeight={700} sx={{ mt: 0.35 }}>{nextAction.action}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{nextAction.rationale}</Typography></Paper></Stack>
     {notice && <Alert severity={notice.includes("失败") || notice.includes("请先") ? "warning" : "success"} onClose={() => setNotice(null)}>{notice}</Alert>}

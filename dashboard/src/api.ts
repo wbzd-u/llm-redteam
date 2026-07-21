@@ -1,4 +1,4 @@
-import type { CaseDetail, CaseRow, Overview, PaperPacket, ResearchSummary, TaskWorkspace } from "./types";
+import type { CaseDetail, CaseRow, ExecutionArtifacts, Overview, PaperPacket, ResearchSummary, TaskWorkspace } from "./types";
 
 const baseUrl = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8787";
 const sourceQuery = (source: string) => source === "all" ? "" : `?source=${encodeURIComponent(source)}`;
@@ -25,5 +25,6 @@ export const api = {
   createTask: (payload: unknown) => post<{ case_id: string }>("/api/tasks", payload),
   createTaskDraft: (caseId: string) => post(`/api/tasks/${encodeURIComponent(caseId)}/plan/draft`, {}),
   approveTaskPlan: (caseId: string, planId: string) => post(`/api/tasks/${encodeURIComponent(caseId)}/plans/${encodeURIComponent(planId)}/approve`, {}),
+  executionArtifacts: (caseId: string, planId: string) => get<ExecutionArtifacts>(`/api/tasks/${encodeURIComponent(caseId)}/plans/${encodeURIComponent(planId)}/artifacts`),
   addObservation: (caseId: string, payload: unknown) => post(`/api/tasks/${encodeURIComponent(caseId)}/observation`, payload),
 };

@@ -7,6 +7,7 @@ from .planner import build_planner_brief, deterministic_draft, validate_plan_pay
 from .analysis_export import case_markdown, write_attempt_csv
 from .llm_provider import OpenAICompatiblePlanner, ProviderError
 from .campaign import create_campaign, load_campaign_inputs, run_campaign
+from .execution_artifacts import compile_execution_artifacts
 from .research import paper_packet, research_cross_tabs, research_summary, write_case_csv, write_paper_packet, write_summary_json, write_summary_svg
 from .web_api import create_app
 from .defense import coverage_matrix, observation_verdict, regression_gate
@@ -47,6 +48,7 @@ __all__ = [
     "derive_stage",
     "coverage_matrix",
     "create_campaign",
+    "compile_execution_artifacts",
     "build_planner_brief",
     "deterministic_draft",
     "load_inspect_samples",

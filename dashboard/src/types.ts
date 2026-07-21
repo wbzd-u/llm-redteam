@@ -166,3 +166,13 @@ export interface PlanStep {
   stop_condition: string;
   approval_required: boolean;
 }
+
+export interface ExecutionArtifacts {
+  ready_for_campaign: boolean;
+  blocking_reason: string;
+  steps: Array<{ step_id: string; objective: string; variables: Record<string, string>; input: null; input_status: string }>;
+  replay: { target_kind: string; inputs: Array<{ step_id: string; input: null }>; note: string };
+  pyrit: { adapter: string; required_local_configuration: string[]; steps: Array<{ step_id: string }> };
+  inspect: { note: string; samples: Array<{ id: string; input: null }> };
+  promptfoo: { note: string; tests: Array<{ description: string; vars: { prompt: null } }> };
+}
