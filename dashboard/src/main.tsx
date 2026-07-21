@@ -78,21 +78,6 @@ function ActionCard({ icon, title, description, action, onAction, emphasis = fal
   </Paper>;
 }
 
-function CaseCard({ row, onOpen }: { row: CaseRow; onOpen: () => void }) {
-  const [mechanism, reuse] = experienceFrom(row);
-  return <Paper variant="outlined" sx={{ p: 2.25, height: "100%", display: "flex", flexDirection: "column" }}>
-    <Stack direction="row" justifyContent="space-between" gap={1} alignItems="flex-start">
-      <Box sx={{ minWidth: 0 }}><Typography variant="subtitle1" fontWeight={600} noWrap title={row.title}>{row.title}</Typography><Typography variant="caption" color="text.secondary">{row.target || "目标未记录"}</Typography></Box>
-      <StatusChip value={row.status} />
-    </Stack>
-    <Divider sx={{ my: 1.75 }} />
-    <Typography variant="caption" color="text.secondary">可复用机制</Typography>
-    <Typography variant="body2" sx={{ mt: 0.35, fontWeight: 600 }}>{mechanism}</Typography>
-    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.65, mb: 2, flexGrow: 1 }}>{reuse}</Typography>
-    <Button size="small" onClick={onOpen} sx={{ alignSelf: "flex-start" }}>查看复盘</Button>
-  </Paper>;
-}
-
 function HomePage({ overview, rows, selectCase, goToCases, goToExperience, openIntake }: { overview: Overview; rows: CaseRow[]; selectCase: (id: string) => void; goToCases: () => void; goToExperience: () => void; openIntake: () => void }) {
   const totals = overview.summary.totals;
   const confirmed = rows.filter((row) => row.status === "confirmed");
@@ -129,13 +114,6 @@ function HomePage({ overview, rows, selectCase, goToCases, goToExperience, openI
       </Grid>
     </Grid>
 
-    <Box>
-      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} gap={1} sx={{ mb: 2 }}>
-        <Box><Typography variant="h5">我的已通关经验</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>先展示你的历史记录；每一条都可以回到原始复盘，而不是只留下一个分数。</Typography></Box>
-        <Button onClick={goToExperience}>查看全部经验</Button>
-      </Stack>
-      {confirmed.length ? <Grid container spacing={2.25}>{confirmed.slice(0, 6).map((row) => <Grid key={row.case_id} size={{ xs: 12, md: 6, xl: 4 }}><CaseCard row={row} onOpen={() => selectCase(row.case_id)} /></Grid>)}</Grid> : <EmptyState title="还没有历史通关记录" description="把你已有的通关复盘导入后，这里会自动成为你的个人经验库。" action="查看我的案例" onAction={goToCases} />}
-    </Box>
   </Stack>;
 }
 
@@ -149,11 +127,18 @@ function CasesPage({ rows, selectCase }: { rows: CaseRow[]; selectCase: (id: str
   </Stack>;
 }
 
-function ExperiencePage({ rows, selectCase }: { rows: CaseRow[]; selectCase: (id: string) => void }) {
+function ExperiencePage({ rows, goToCases }: { rows: CaseRow[]; goToCases: () => void }) {
   const confirmed = rows.filter((row) => row.status === "confirmed");
+  const mechanisms = Array.from(confirmed.reduce((groups, row) => {
+    const [name, reuse] = experienceFrom(row);
+    const current = groups.get(name) ?? { name, reuse, count: 0 };
+    current.count += 1;
+    groups.set(name, current);
+    return groups;
+  }, new Map<string, { name: string; reuse: string; count: number }>()).values());
   return <Stack spacing={3}>
-    <Box><Typography variant="h4">我的经验库</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>把历史通关变成可复用的机制。每个卡片先说“学到什么”，再回到原始案例核对事实。</Typography></Box>
-    {confirmed.length ? <Grid container spacing={2.25}>{confirmed.map((row) => <Grid key={row.case_id} size={{ xs: 12, md: 6, xl: 4 }}><CaseCard row={row} onOpen={() => selectCase(row.case_id)} /></Grid>)}</Grid> : <EmptyState title="经验库还在等待第一条记录" description="导入或整理一个已完成案例后，它会出现在这里。" action="查看我的案例" onAction={() => undefined} />}
+    <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} gap={2}><Box><Typography variant="h4">我的经验</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>这里是从历史案例抽取出的“可复用规律”，不是第二份案例列表。所有原始记录只在“我的案例”中维护。</Typography></Box><Button variant="outlined" onClick={goToCases}>查看原始案例</Button></Stack>
+    {mechanisms.length ? <><Paper variant="outlined" sx={{ p: 2.25 }}><Typography variant="body2" color="text.secondary">当前由 {confirmed.length} 条历史通关记录归纳出 {mechanisms.length} 类经验。每类经验应继续用新的独立案例、负例和运行时证据验证。</Typography></Paper><Grid container spacing={2.25}>{mechanisms.map((item) => <Grid key={item.name} size={{ xs: 12, md: 6, xl: 4 }}><Paper variant="outlined" sx={{ p: 2.25, height: "100%", display: "flex", flexDirection: "column" }}><Typography variant="caption" color="text.secondary">自动归纳的机制</Typography><Typography variant="h6" sx={{ mt: 0.5 }}>{item.name}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 1, flexGrow: 1 }}>{item.reuse}</Typography><Chip size="small" label={`来自 ${item.count} 条历史通关`} color="success" variant="outlined" sx={{ mt: 2, alignSelf: "flex-start" }} /></Paper></Grid>)}</Grid></> : <EmptyState title="经验库还在等待第一条记录" description="导入或整理一个已完成案例后，系统会从案例复盘中归纳机制。" action="查看我的案例" onAction={goToCases} />}
   </Stack>;
 }
 
@@ -258,7 +243,7 @@ function App() {
   return <ThemeProvider theme={theme}><CssBaseline /><Box sx={{ display: "flex", minHeight: "100vh" }}>
     <AppBar position="fixed" elevation={0} sx={{ zIndex: (value) => value.zIndex.drawer + 1, borderBottom: 1, borderColor: "divider", backgroundColor: "background.default" }}><Toolbar sx={{ minHeight: { xs: 64, md: 72 } }}><HubRoundedIcon sx={{ mr: 1.25, color: "primary.main" }} /><Typography variant="h6" sx={{ flexGrow: 1 }}>LLM 红队助手</Typography><ToggleButtonGroup size="small" value={source} exclusive onChange={(_, value) => { if (value) { setSource(value); setDetail(null); } }} sx={{ mr: 1.5 }}><ToggleButton value="user-kb">我的知识库</ToggleButton><ToggleButton value="all">全部数据</ToggleButton></ToggleButtonGroup><Button color="inherit" onClick={() => void load()}>刷新</Button></Toolbar></AppBar>
     <Drawer variant="permanent" sx={{ width: drawerWidth, flexShrink: 0, "& .MuiDrawer-paper": { width: drawerWidth, boxSizing: "border-box", borderRight: 1, borderColor: "divider", backgroundImage: "none" } }}><Toolbar sx={{ minHeight: { xs: 64, md: 72 } }} /><List sx={{ px: 1.25, pt: 2 }}>{nav.map(([key, label, icon]) => <ListItemButton key={key} selected={page === key && !detail} onClick={() => go(key)} sx={{ borderRadius: 1.5, mb: 0.5 }}><ListItemIcon>{icon}</ListItemIcon><ListItemText primary={label} /></ListItemButton>)}</List><Divider sx={{ mx: 2, my: 1 }} /><Box sx={{ px: 2.5, py: 2 }}><Stack direction="row" spacing={1} alignItems="center"><FactCheckRoundedIcon color="primary" fontSize="small" /><Typography variant="body2" fontWeight={600}>本地优先</Typography></Stack><Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>你的案例和证据保存在本机。这里不会自动把公开种子算作个人成绩。</Typography></Box></Drawer>
-    <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 }, pt: { xs: 11, md: 13 }, maxWidth: 1560, width: "100%" }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}。请先运行 <code>python -m redteam_memory serve</code>。</Alert>}{!overview || !research || !paperPacket ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 320 }}><CircularProgress /></Box> : detail ? <DetailPage detail={detail} close={() => setDetail(null)} /> : page === "home" ? <HomePage overview={overview} rows={cases} selectCase={selectCase} goToCases={() => go("cases")} goToExperience={() => go("experience")} openIntake={() => setIntakeOpen(true)} /> : page === "cases" ? <CasesPage rows={cases} selectCase={selectCase} /> : page === "experience" ? <ExperiencePage rows={cases} selectCase={selectCase} /> : <ResearchPage summary={research} packet={paperPacket} />}</Box>
+    <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 }, pt: { xs: 11, md: 13 }, maxWidth: 1560, width: "100%" }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}。请先运行 <code>python -m redteam_memory serve</code>。</Alert>}{!overview || !research || !paperPacket ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 320 }}><CircularProgress /></Box> : detail ? <DetailPage detail={detail} close={() => setDetail(null)} /> : page === "home" ? <HomePage overview={overview} rows={cases} selectCase={selectCase} goToCases={() => go("cases")} goToExperience={() => go("experience")} openIntake={() => setIntakeOpen(true)} /> : page === "cases" ? <CasesPage rows={cases} selectCase={selectCase} /> : page === "experience" ? <ExperiencePage rows={cases} goToCases={() => go("cases")} /> : <ResearchPage summary={research} packet={paperPacket} />}</Box>
     <Dialog open={intakeOpen} onClose={() => setIntakeOpen(false)} maxWidth="sm" fullWidth><DialogTitle>导入一个新关卡</DialogTitle><DialogContent dividers><Stack spacing={2}><Typography>第一版采用结构化 JSON 导入，目的是保留题目、授权范围、成功判据和已有对话，避免以后只能靠截图回忆上下文。</Typography><Paper variant="outlined" sx={{ p: 1.5, backgroundColor: "background.default" }}><Typography component="code" variant="body2">python -m redteam_memory intake import examples/challenge-intake.example.json</Typography></Paper><Typography variant="body2" color="text.secondary">可先复制 <code>examples/challenge-intake.example.json</code>，把题目内容和授权范围填进去。导入后在“我的案例”中打开它，再匹配历史经验、创建计划并记录响应。</Typography></Stack></DialogContent><DialogActions><Button onClick={() => setIntakeOpen(false)}>知道了</Button><Button variant="contained" onClick={() => { setIntakeOpen(false); go("cases"); }}>打开我的案例</Button></DialogActions></Dialog>
   </Box></ThemeProvider>;
 }
