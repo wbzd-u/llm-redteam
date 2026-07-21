@@ -1,127 +1,216 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  Alert, AppBar, Box, Chip, CircularProgress, CssBaseline, Divider, Drawer,
-  List, ListItemButton, ListItemIcon, ListItemText, Paper, Stack, Toolbar,
-  Typography, ThemeProvider, Button, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Tabs, Tab,
-  ToggleButton, ToggleButtonGroup,
+  Alert, AppBar, Box, Button, Chip, CircularProgress, CssBaseline, Dialog,
+  DialogActions, DialogContent, DialogTitle, Divider, Drawer, Grid, List,
+  ListItemButton, ListItemIcon, ListItemText, Paper, Stack, Tab, Table,
+  TableBody, TableCell, TableContainer, TableHead, TableRow, Tabs, Toolbar,
+  ToggleButton, ToggleButtonGroup, Typography, ThemeProvider,
 } from "@mui/material";
+import AddTaskRoundedIcon from "@mui/icons-material/AddTaskRounded";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
+import FactCheckRoundedIcon from "@mui/icons-material/FactCheckRounded";
 import FolderOpenRoundedIcon from "@mui/icons-material/FolderOpenRounded";
-import ScienceRoundedIcon from "@mui/icons-material/ScienceRounded";
 import HubRoundedIcon from "@mui/icons-material/HubRounded";
+import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import PlayCircleOutlineRoundedIcon from "@mui/icons-material/PlayCircleOutlineRounded";
+import ScienceRoundedIcon from "@mui/icons-material/ScienceRounded";
 import { BarChart } from "@mui/x-charts/BarChart";
 import { api } from "./api";
 import { theme } from "./theme";
 import type { CaseDetail, CaseRow, Overview, ResearchSummary } from "./types";
 
-const drawerWidth = 252;
-type Page = "overview" | "cases" | "research";
+const drawerWidth = 256;
+type Page = "home" | "cases" | "experience" | "research";
 
-function Metric({ label, value, detail }: { label: string; value: string | number; detail: string }) {
-  return <Paper variant="outlined" sx={{ p: 2, minWidth: 170, flex: "1 1 170px" }}>
+const statusLabel: Record<string, string> = {
+  confirmed: "历史已通关", probing: "正在探索", baseline: "已建立基线", verification: "等待验证",
+  halted: "已暂停", first_refusal: "首次被拒绝", completed: "已完成", budget_exhausted: "预算已用完",
+  failed: "未成功", running: "正在运行", pending: "等待执行", approved: "已批准",
+  draft: "草稿", verified: "已验证", unverified: "未验证", unknown: "待整理",
+  refused: "被拒绝", error: "出错",
+};
+
+function StatusChip({ value }: { value: string }) {
+  const color = value === "confirmed" || value === "verified" || value === "completed"
+    ? "success" : value === "failed" || value === "halted" || value === "budget_exhausted"
+      ? "warning" : "default";
+  return <Chip size="small" label={statusLabel[value] ?? value} color={color} variant={color === "default" ? "outlined" : "filled"} />;
+}
+
+function experienceFrom(row: CaseRow) {
+  const text = `${row.title} ${row.mechanism} ${row.tags.join(" ")}`.toLowerCase();
+  if (text.includes("narrative") || text.includes("identity")) return ["叙事与角色边界", "观察角色设定是否会把目标的职责、权限或身份叙事带偏。"];
+  if (text.includes("standing") || text.includes("exception") || text.includes("policy")) return ["规则解释与例外边界", "关注系统如何理解规则、例外和优先级；先用无害样本确认边界。"];
+  if (text.includes("regex") || text.includes("semantic")) return ["字面规则与语义理解", "对照字面校验和语义意图的差异，记录最小可复现输入。"];
+  if (text.includes("template") || text.includes("lamp")) return ["模板与指令层级", "分析模板、上下文和目标行为之间的信任边界。"];
+  if (text.includes("key") || text.includes("librarius")) return ["上下文定位与重建", "验证模型会依据哪些上下文片段形成结论，避免凭猜测下结论。"];
+  if (text.includes("genie") || text.includes("freedom")) return ["目标重述与约束理解", "测试同一目标在不同表述下，约束是否仍被一致执行。"];
+  return [row.mechanism || "待整理机制", "打开案例查看你的原始复盘，再把可复用的规律整理成机制卡。"];
+}
+
+function Metric({ label, value, detail, tone = "primary" }: { label: string; value: string | number; detail: string; tone?: "primary" | "success" | "neutral" }) {
+  const border = tone === "success" ? "success.main" : tone === "primary" ? "primary.main" : "divider";
+  return <Paper variant="outlined" sx={{ p: 2.25, height: "100%", borderTop: 3, borderTopColor: border }}>
     <Typography variant="body2" color="text.secondary">{label}</Typography>
-    <Typography variant="h4" sx={{ mt: 0.5 }}>{value}</Typography>
-    <Typography variant="caption" color="text.secondary">{detail}</Typography>
+    <Typography variant="h4" sx={{ mt: 0.6, mb: 0.75 }}>{value}</Typography>
+    <Typography variant="body2" color="text.secondary">{detail}</Typography>
   </Paper>;
 }
 
-function StatusChip({ value }: { value: string }) {
-  const color = value === "confirmed" ? "success" : value === "failed" || value === "halted" ? "warning" : "default";
-  const labels: Record<string, string> = {
-    confirmed: "已确认", probing: "探测中", baseline: "基线", verification: "待验证",
-    halted: "已暂停", first_refusal: "首次拒绝", completed: "已完成", budget_exhausted: "预算耗尽",
-    failed: "执行失败", running: "运行中", pending: "待运行", approved: "已批准", draft: "草稿",
-    verified: "已验证", unverified: "未验证", unknown: "未知", refused: "拒绝", error: "错误",
-  };
-  return <Chip size="small" label={labels[value] ?? value} color={color} variant={color === "default" ? "outlined" : "filled"} />;
+function EmptyState({ title, description, action, onAction }: { title: string; description: string; action: string; onAction: () => void }) {
+  return <Paper variant="outlined" sx={{ p: 3.5, textAlign: "center", borderStyle: "dashed" }}>
+    <AutoAwesomeRoundedIcon color="primary" sx={{ fontSize: 34, mb: 1 }} />
+    <Typography variant="h6">{title}</Typography>
+    <Typography color="text.secondary" sx={{ mt: 0.75, mb: 2 }}>{description}</Typography>
+    <Button variant="contained" onClick={onAction}>{action}</Button>
+  </Paper>;
+}
+
+function ActionCard({ icon, title, description, action, onAction, emphasis = false }: { icon: React.ReactNode; title: string; description: string; action: string; onAction: () => void; emphasis?: boolean }) {
+  return <Paper variant="outlined" sx={{ p: 2.5, height: "100%", display: "flex", flexDirection: "column", alignItems: "flex-start", borderColor: emphasis ? "primary.main" : "divider", background: emphasis ? "linear-gradient(135deg, rgba(56,189,248,.10), rgba(56,189,248,.02))" : undefined }}>
+    <Box sx={{ color: "primary.main", mb: 1.75 }}>{icon}</Box>
+    <Typography variant="h6">{title}</Typography>
+    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, mb: 2.25, flexGrow: 1 }}>{description}</Typography>
+    <Button variant={emphasis ? "contained" : "outlined"} onClick={onAction}>{action}</Button>
+  </Paper>;
+}
+
+function CaseCard({ row, onOpen }: { row: CaseRow; onOpen: () => void }) {
+  const [mechanism, reuse] = experienceFrom(row);
+  return <Paper variant="outlined" sx={{ p: 2.25, height: "100%", display: "flex", flexDirection: "column" }}>
+    <Stack direction="row" justifyContent="space-between" gap={1} alignItems="flex-start">
+      <Box sx={{ minWidth: 0 }}><Typography variant="subtitle1" fontWeight={600} noWrap title={row.title}>{row.title}</Typography><Typography variant="caption" color="text.secondary">{row.target || "目标未记录"}</Typography></Box>
+      <StatusChip value={row.status} />
+    </Stack>
+    <Divider sx={{ my: 1.75 }} />
+    <Typography variant="caption" color="text.secondary">可复用机制</Typography>
+    <Typography variant="body2" sx={{ mt: 0.35, fontWeight: 600 }}>{mechanism}</Typography>
+    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.65, mb: 2, flexGrow: 1 }}>{reuse}</Typography>
+    <Button size="small" onClick={onOpen} sx={{ alignSelf: "flex-start" }}>查看复盘</Button>
+  </Paper>;
+}
+
+function HomePage({ overview, rows, selectCase, goToCases, goToExperience, openIntake }: { overview: Overview; rows: CaseRow[]; selectCase: (id: string) => void; goToCases: () => void; goToExperience: () => void; openIntake: () => void }) {
+  const totals = overview.summary.totals;
+  const confirmed = rows.filter((row) => row.status === "confirmed");
+  const inProgress = rows.filter((row) => row.status !== "confirmed").slice(0, 3);
+  return <Stack spacing={4}>
+    <Box sx={{ maxWidth: 760 }}>
+      <Typography variant="overline" color="primary.main" fontWeight={700}>个人红队助手</Typography>
+      <Typography variant="h3" sx={{ mt: 0.5 }}>从一次通关，变成下一次的经验。</Typography>
+      <Typography color="text.secondary" sx={{ mt: 1.25, fontSize: "1.05rem" }}>这里不是模型监控台。它帮你保存通关和失败的关键机制，在新关卡开始时找到相似经验，并把每一步测试变成可复盘的研究记录。</Typography>
+    </Box>
+
+    <Grid container spacing={2.25}>
+      <Grid size={{ xs: 12, sm: 4 }}><ActionCard icon={<AddTaskRoundedIcon fontSize="large" />} title="导入新关卡" description="粘贴题目、授权范围和成功判据。导入后会自动从你的经验中寻找相似机制。" action="查看导入方式" onAction={openIntake} emphasis /></Grid>
+      <Grid size={{ xs: 12, sm: 4 }}><ActionCard icon={<PlayCircleOutlineRoundedIcon fontSize="large" />} title="继续一个案例" description={inProgress.length ? `你有 ${inProgress.length} 个待推进案例，可以继续记录测试和结果。` : "当前没有正在推进的案例。先导入一个关卡，系统会为它建立工作区。"} action={inProgress.length ? "查看待推进案例" : "查看我的案例"} onAction={goToCases} /></Grid>
+      <Grid size={{ xs: 12, sm: 4 }}><ActionCard icon={<MenuBookRoundedIcon fontSize="large" />} title="复盘通关经验" description={`你的知识库中已有 ${confirmed.length} 条历史已通关案例，适合先整理出可迁移的机制。`} action="打开经验库" onAction={goToExperience} /></Grid>
+    </Grid>
+
+    <Grid container spacing={2.25}>
+      <Grid size={{ xs: 12, lg: 8 }}>
+        <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 }, height: "100%" }}>
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} gap={1.5} sx={{ mb: 2.5 }}>
+            <Box><Typography variant="h5">建议从这里开始</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>先选一个明确动作，减少在“看数据”和“真正推进关卡”之间来回切换。</Typography></Box>
+            <Chip label="按你的本地知识库" color="primary" variant="outlined" />
+          </Stack>
+          {inProgress.length ? <Stack spacing={1.25}>{inProgress.map((row) => <Paper key={row.case_id} variant="outlined" sx={{ p: 1.5, display: "flex", gap: 1.5, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}><Box><Typography fontWeight={600}>{row.title}</Typography><Typography variant="body2" color="text.secondary">下一步：查看已记录的题目、对话和计划。</Typography></Box><Button variant="contained" onClick={() => selectCase(row.case_id)}>继续</Button></Paper>)}</Stack> : <EmptyState title="当前没有正在推进的关卡" description="导入一题后，我会把题目与历史经验匹配，并帮你建立从分析到复盘的工作区。" action="查看导入方式" onAction={openIntake} />}
+        </Paper>
+      </Grid>
+      <Grid size={{ xs: 12, lg: 4 }}>
+        <Stack spacing={2.25} height="100%">
+          <Metric label="历史通关经验" value={totals.historical_confirmed_cases} detail="来自你的本地复盘记录" tone="success" />
+          <Metric label="已整理的个人案例" value={totals.user_kb_cases} detail="不把公开种子混入首页" tone="primary" />
+          <Metric label="运行时验证证据" value={totals.confirmed_cases} detail="只有平台或执行记录可验证时才计入" tone="neutral" />
+        </Stack>
+      </Grid>
+    </Grid>
+
+    <Box>
+      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} gap={1} sx={{ mb: 2 }}>
+        <Box><Typography variant="h5">我的已通关经验</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>先展示你的历史记录；每一条都可以回到原始复盘，而不是只留下一个分数。</Typography></Box>
+        <Button onClick={goToExperience}>查看全部经验</Button>
+      </Stack>
+      {confirmed.length ? <Grid container spacing={2.25}>{confirmed.slice(0, 6).map((row) => <Grid key={row.case_id} size={{ xs: 12, md: 6, xl: 4 }}><CaseCard row={row} onOpen={() => selectCase(row.case_id)} /></Grid>)}</Grid> : <EmptyState title="还没有历史通关记录" description="把你已有的通关复盘导入后，这里会自动成为你的个人经验库。" action="查看我的案例" onAction={goToCases} />}
+    </Box>
+  </Stack>;
+}
+
+function CasesPage({ rows, selectCase }: { rows: CaseRow[]; selectCase: (id: string) => void }) {
+  const sorted = [...rows].sort((a, b) => Number(a.status === "confirmed") - Number(b.status === "confirmed") || b.case_id.localeCompare(a.case_id));
+  return <Stack spacing={3}>
+    <Box><Typography variant="h4">我的案例</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>这里保存题目、尝试、证据和复盘。点击一条案例查看完整工作区。</Typography></Box>
+    <Paper variant="outlined"><TableContainer><Table><TableHead><TableRow><TableCell>案例</TableCell><TableCell>目标</TableCell><TableCell>当前状态</TableCell><TableCell align="right">尝试</TableCell><TableCell align="right">证据</TableCell><TableCell /></TableRow></TableHead>
+      <TableBody>{sorted.map((row) => <TableRow hover key={row.case_id}><TableCell><Typography fontWeight={600}>{row.title}</Typography><Typography variant="caption" color="text.secondary">{row.carrier || "载体未记录"} · {row.language || "语言未记录"}</Typography></TableCell><TableCell>{row.target || "未记录"}</TableCell><TableCell><StatusChip value={row.status} /></TableCell><TableCell align="right">{row.attempt_count}</TableCell><TableCell align="right">{row.evidence_count}</TableCell><TableCell align="right"><Button size="small" onClick={() => selectCase(row.case_id)}>打开</Button></TableCell></TableRow>)}</TableBody>
+    </Table></TableContainer></Paper>
+  </Stack>;
+}
+
+function ExperiencePage({ rows, selectCase }: { rows: CaseRow[]; selectCase: (id: string) => void }) {
+  const confirmed = rows.filter((row) => row.status === "confirmed");
+  return <Stack spacing={3}>
+    <Box><Typography variant="h4">我的经验库</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>把历史通关变成可复用的机制。每个卡片先说“学到什么”，再回到原始案例核对事实。</Typography></Box>
+    {confirmed.length ? <Grid container spacing={2.25}>{confirmed.map((row) => <Grid key={row.case_id} size={{ xs: 12, md: 6, xl: 4 }}><CaseCard row={row} onOpen={() => selectCase(row.case_id)} /></Grid>)}</Grid> : <EmptyState title="经验库还在等待第一条记录" description="导入或整理一个已完成案例后，它会出现在这里。" action="查看我的案例" onAction={() => undefined} />}
+  </Stack>;
 }
 
 function chartSeries(data: Record<string, number>, limit = 8) {
   const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
   if (sorted.length <= limit) return sorted;
   const visible = sorted.slice(0, limit);
-  const remainder = sorted.slice(limit).reduce((total, [, value]) => total + value, 0);
-  return [...visible, ["其他", remainder] as [string, number]];
+  return [...visible, ["其他", sorted.slice(limit).reduce((total, [, value]) => total + value, 0)] as [string, number]];
 }
 
 function CountChart({ title, data }: { title: string; data: Record<string, number> }) {
   const entries = chartSeries(data);
-  return <Paper variant="outlined" sx={{ p: 2, minHeight: 300 }}>
-    <Typography variant="subtitle1" sx={{ mb: 1 }}>{title}</Typography>
-    {entries.length === 0 ? <Typography color="text.secondary">No recorded data.</Typography> :
-      <BarChart
-        height={Math.max(235, entries.length * 34)}
-        layout="horizontal"
-        yAxis={[{ data: entries.map(([label]) => label), scaleType: "band" }]}
-        series={[{ data: entries.map(([, value]) => value), color: "#7dd3fc" }]}
-        margin={{ left: 100, right: 20, top: 10, bottom: 20 }}
-      />}
+  return <Paper variant="outlined" sx={{ p: 2.25, minHeight: 300 }}><Typography variant="subtitle1" fontWeight={600}>{title}</Typography>
+    {entries.length === 0 ? <Typography color="text.secondary" sx={{ mt: 3 }}>暂时没有可分析的数据。</Typography> : <BarChart height={Math.max(235, entries.length * 34)} layout="horizontal" yAxis={[{ data: entries.map(([label]) => label), scaleType: "band" }]} series={[{ data: entries.map(([, value]) => value), color: "#38bdf8" }]} margin={{ left: 110, right: 20, top: 16, bottom: 20 }} />}
   </Paper>;
 }
 
-function OverviewPage({ overview, selectCase }: { overview: Overview; selectCase: (id: string) => void }) {
-  const totals = overview.summary.totals;
-  return <Stack spacing={3}>
-    <Box><Typography variant="h4">研究总览</Typography><Typography color="text.secondary">以证据为核心的本地红队实验工作台。</Typography></Box>
-    <Stack direction="row" flexWrap="wrap" gap={2}>
-      <Metric label="我的知识库" value={totals.user_kb_cases} detail={`${totals.cases} 个当前筛选范围案例`} />
-      <Metric label="历史已通关" value={`${(totals.historical_confirmed_rate * 100).toFixed(0)}%`} detail={`${totals.historical_confirmed_cases} 条来自你的通关记录`} />
-      <Metric label="运行时证据" value={`${(totals.confirmed_case_rate * 100).toFixed(0)}%`} detail={`${totals.confirmed_cases} 个案例有结构化平台证据`} />
-      <Metric label="可复现" value={`${(totals.reproduced_case_rate * 100).toFixed(0)}%`} detail={`${totals.reproduced_cases} 个案例至少确认两次`} />
-      <Metric label="Campaign" value={totals.campaigns} detail={`记录成本：${totals.observed_cost}`} />
-    </Stack>
-    <Stack direction={{ xs: "column", lg: "row" }} spacing={2}>
-      <Box flex={1}><CountChart title="按目标分布（前 8 项）" data={overview.summary.cases_by_target} /></Box>
-      <Box flex={1}><CountChart title="按结果分布" data={overview.summary.attempts_by_outcome} /></Box>
-    </Stack>
-    <Paper variant="outlined" sx={{ p: 2 }}>
-      <Typography variant="subtitle1" sx={{ mb: 1 }}>最近案例</Typography>
-      <TableContainer><Table size="small"><TableHead><TableRow><TableCell>案例</TableCell><TableCell>目标</TableCell><TableCell>阶段</TableCell><TableCell align="right">尝试次数</TableCell></TableRow></TableHead>
-      <TableBody>{overview.recent_cases.map((row) => <TableRow hover key={row.case_id} sx={{ cursor: "pointer" }} onClick={() => selectCase(row.case_id)}><TableCell>{row.title}</TableCell><TableCell>{row.target}</TableCell><TableCell><StatusChip value={row.stage} /></TableCell><TableCell align="right">{row.attempt_count}</TableCell></TableRow>)}</TableBody></Table></TableContainer>
-    </Paper>
+function ResearchPage({ summary }: { summary: ResearchSummary }) {
+  return <Stack spacing={3}><Box><Typography variant="h4">研究分析</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>这里用于查看整体规律和导出研究数据。首页不会混入这些统计。</Typography></Box>
+    <Grid container spacing={2.25}><Grid size={{ xs: 12, lg: 6 }}><CountChart title="按目标的案例分布" data={summary.cases_by_target} /></Grid><Grid size={{ xs: 12, lg: 6 }}><CountChart title="按尝试结果的分布" data={summary.attempts_by_outcome} /></Grid><Grid size={{ xs: 12, lg: 6 }}><CountChart title="按载体的案例分布" data={summary.cases_by_carrier} /></Grid><Grid size={{ xs: 12, lg: 6 }}><CountChart title="按语言标签的分布" data={summary.cases_by_language} /></Grid></Grid>
   </Stack>;
-}
-
-function CasesPage({ rows, selectCase }: { rows: CaseRow[]; selectCase: (id: string) => void }) {
-  return <Stack spacing={3}><Box><Typography variant="h4">案例工作区</Typography><Typography color="text.secondary">选择案例，查看题目、证据、计划和执行历史。</Typography></Box>
-    <Paper variant="outlined"><TableContainer><Table><TableHead><TableRow><TableCell>标题</TableCell><TableCell>目标</TableCell><TableCell>载体</TableCell><TableCell>语言</TableCell><TableCell>阶段</TableCell><TableCell align="right">尝试</TableCell><TableCell align="right">Campaign</TableCell></TableRow></TableHead>
-      <TableBody>{rows.map((row) => <TableRow hover key={row.case_id} sx={{ cursor: "pointer" }} onClick={() => selectCase(row.case_id)}><TableCell><Typography fontWeight={500}>{row.title}</Typography><Typography variant="caption" color="text.secondary">{row.case_id}</Typography></TableCell><TableCell>{row.target}</TableCell><TableCell>{row.carrier}</TableCell><TableCell>{row.language}</TableCell><TableCell><StatusChip value={row.stage} /></TableCell><TableCell align="right">{row.attempt_count}</TableCell><TableCell align="right">{row.campaign_count}</TableCell></TableRow>)}</TableBody>
-    </Table></TableContainer></Paper></Stack>;
 }
 
 function DetailPage({ detail, close }: { detail: CaseDetail; close: () => void }) {
   const [tab, setTab] = useState(0);
+  const [mechanism, reuse] = experienceFrom(detail);
   const sections = [
-    <Stack spacing={2} key="intake"><Typography variant="h6">{detail.title}</Typography><Typography>{detail.challenge || "尚未记录题目内容。"}</Typography><Divider /><Typography variant="subtitle2">授权范围</Typography><Typography color="text.secondary">{detail.intake?.authorization_scope || "尚未记录"}</Typography><Typography variant="subtitle2">成功判据</Typography>{(detail.intake?.success_criteria ?? []).map((item) => <Typography key={item}>• {item}</Typography>)}</Stack>,
-    <Stack spacing={1} key="evidence">{detail.evidence.length ? detail.evidence.map((item) => <Paper key={item.evidence_id} variant="outlined" sx={{ p: 1.5 }}><Stack direction="row" justifyContent="space-between"><Typography>{item.description}</Typography><StatusChip value={item.verified ? "verified" : "unverified"} /></Stack><Typography variant="caption" color="text.secondary">{item.kind} · {item.source}</Typography></Paper>) : <Typography color="text.secondary">尚无证据记录。</Typography>}</Stack>,
-    <Stack spacing={1} key="plans">{detail.plans.length ? detail.plans.map((item) => <Paper key={item.plan_id} variant="outlined" sx={{ p: 1.5 }}><Stack direction="row" justifyContent="space-between"><Typography>{item.planner}</Typography><StatusChip value={item.status} /></Stack><Typography variant="caption" color="text.secondary">{item.steps.length} 个计划步骤</Typography></Paper>) : <Typography color="text.secondary">尚无计划记录。</Typography>}</Stack>,
-    <Stack spacing={1} key="campaigns">{detail.campaigns.length ? detail.campaigns.map((item) => <Paper key={item.campaign_id} variant="outlined" sx={{ p: 1.5 }}><Stack direction="row" justifyContent="space-between"><Typography>{item.target_kind}</Typography><StatusChip value={item.status} /></Stack><Typography variant="caption" color="text.secondary">{item.executed_turns} 轮 · {item.stop_reason}</Typography></Paper>) : <Typography color="text.secondary">尚无 Campaign 记录。</Typography>}</Stack>,
+    <Stack spacing={2} key="overview"><Typography variant="h5">{detail.title}</Typography><Stack direction="row" spacing={1}><StatusChip value={detail.status} /><Chip size="small" label={mechanism} variant="outlined" /></Stack><Typography color="text.secondary">{detail.challenge || "尚未记录题目内容。"}</Typography><Divider /><Typography variant="subtitle2">从这个案例可以复用什么</Typography><Typography>{reuse}</Typography><Typography variant="subtitle2">你的原始复盘</Typography><Typography color="text.secondary" sx={{ whiteSpace: "pre-wrap" }}>{detail.notes || "尚未整理复盘。"}</Typography></Stack>,
+    <Stack spacing={1} key="evidence">{detail.evidence.length ? detail.evidence.map((item) => <Paper key={item.evidence_id} variant="outlined" sx={{ p: 1.5 }}><Stack direction="row" justifyContent="space-between" gap={1}><Typography>{item.description}</Typography><StatusChip value={item.verified ? "verified" : "unverified"} /></Stack><Typography variant="caption" color="text.secondary">{item.kind} · {item.source}</Typography></Paper>) : <Typography color="text.secondary">尚无证据记录。执行后的响应、截图或平台判据可在这里形成证据链。</Typography>}</Stack>,
+    <Stack spacing={1} key="plans">{detail.plans.length ? detail.plans.map((item) => <Paper key={item.plan_id} variant="outlined" sx={{ p: 1.5 }}><Stack direction="row" justifyContent="space-between"><Typography>{item.planner}</Typography><StatusChip value={item.status} /></Stack><Typography variant="caption" color="text.secondary">{item.steps.length} 个计划步骤</Typography></Paper>) : <Typography color="text.secondary">尚无计划记录。导入新关卡后可先生成并审核测试计划。</Typography>}</Stack>,
+    <Stack spacing={1} key="campaigns">{detail.campaigns.length ? detail.campaigns.map((item) => <Paper key={item.campaign_id} variant="outlined" sx={{ p: 1.5 }}><Stack direction="row" justifyContent="space-between"><Typography>{item.target_kind}</Typography><StatusChip value={item.status} /></Stack><Typography variant="caption" color="text.secondary">已执行 {item.executed_turns} 轮 · {item.stop_reason}</Typography></Paper>) : <Typography color="text.secondary">尚无执行记录。批准计划并设置预算后，才会进入 Campaign。</Typography>}</Stack>,
   ];
-  return <Stack spacing={2}><Button onClick={close} sx={{ alignSelf: "flex-start" }}>← 返回案例列表</Button><Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable"><Tab label="题目概览" /><Tab label={`证据 (${detail.evidence.length})`} /><Tab label={`计划 (${detail.plans.length})`} /><Tab label={`Campaign (${detail.campaigns.length})`} /></Tabs><Paper variant="outlined" sx={{ p: 2 }}>{sections[tab]}</Paper></Stack>;
-}
-
-function ResearchPage({ summary }: { summary: ResearchSummary }) {
-  return <Stack spacing={3}><Box><Typography variant="h4">科研分析</Typography><Typography color="text.secondary">聚合统计不包含原始提示词和模型响应正文。</Typography></Box><Stack direction={{ xs: "column", lg: "row" }} spacing={2}><Box flex={1}><CountChart title="按载体分布" data={summary.cases_by_carrier} /></Box><Box flex={1}><CountChart title="Campaign 状态" data={summary.campaigns_by_status} /></Box></Stack><Stack direction={{ xs: "column", lg: "row" }} spacing={2}><Box flex={1}><CountChart title="按语言标签分布" data={summary.cases_by_language} /></Box><Box flex={1}><CountChart title="机制关联关系" data={summary.mechanism_links_by_relation} /></Box></Stack></Stack>;
+  return <Stack spacing={2.5}><Button startIcon={<ArrowBackRoundedIcon />} onClick={close} sx={{ alignSelf: "flex-start" }}>返回上一页</Button><Box><Typography variant="overline" color="primary.main">案例工作区</Typography><Typography variant="h4">{detail.title}</Typography></Box><Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable"><Tab label="概览与复盘" /><Tab label={`证据 (${detail.evidence.length})`} /><Tab label={`计划 (${detail.plans.length})`} /><Tab label={`执行 (${detail.campaigns.length})`} /></Tabs><Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }}>{sections[tab]}</Paper></Stack>;
 }
 
 function App() {
-  const [page, setPage] = useState<Page>("overview");
+  const [page, setPage] = useState<Page>("home");
   const [source, setSource] = useState("user-kb");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [research, setResearch] = useState<ResearchSummary | null>(null);
   const [detail, setDetail] = useState<CaseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const load = async (nextSource = source) => { try { setError(null); const [nextOverview, nextCases, nextResearch] = await Promise.all([api.overview(nextSource), api.cases(nextSource), api.research(nextSource)]); setOverview(nextOverview); setCases(nextCases); setResearch(nextResearch); } catch (err) { setError(err instanceof Error ? err.message : "Could not load local API"); } };
+  const [intakeOpen, setIntakeOpen] = useState(false);
+  const load = async (nextSource = source) => { try { setError(null); const [nextOverview, nextCases, nextResearch] = await Promise.all([api.overview(nextSource), api.cases(nextSource), api.research(nextSource)]); setOverview(nextOverview); setCases(nextCases); setResearch(nextResearch); } catch (err) { setError(err instanceof Error ? err.message : "无法连接本地 API"); } };
   useEffect(() => { void load(source); }, [source]);
-  const selectCase = async (caseId: string) => { try { setDetail(await api.caseDetail(caseId)); } catch (err) { setError(err instanceof Error ? err.message : "Could not load case"); } };
+  const selectCase = async (caseId: string) => { try { setDetail(await api.caseDetail(caseId)); } catch (err) { setError(err instanceof Error ? err.message : "无法加载案例"); } };
+  const go = (next: Page) => { setDetail(null); setPage(next); };
   const nav = useMemo(() => [
-    ["overview", "Overview", <DashboardRoundedIcon />], ["cases", "Cases", <FolderOpenRoundedIcon />], ["research", "Research", <ScienceRoundedIcon />],
+    ["home", "首页", <DashboardRoundedIcon />], ["cases", "我的案例", <FolderOpenRoundedIcon />], ["experience", "我的经验", <MenuBookRoundedIcon />], ["research", "研究分析", <ScienceRoundedIcon />],
   ] as const, []);
-  return <ThemeProvider theme={theme}><CssBaseline /><Box sx={{ display: "flex", minHeight: "100vh" }}><AppBar position="fixed" elevation={0} sx={{ zIndex: (value) => value.zIndex.drawer + 1, borderBottom: 1, borderColor: "divider" }}><Toolbar><HubRoundedIcon sx={{ mr: 1.5 }} /><Typography variant="h6" sx={{ flexGrow: 1 }}>LLM 红队研究工作台</Typography><ToggleButtonGroup size="small" value={source} exclusive onChange={(_, value) => { if (value) { setSource(value); setDetail(null); } }} sx={{ mr: 2, backgroundColor: "rgba(255,255,255,.06)" }}><ToggleButton value="user-kb" sx={{ color: "inherit" }}>我的知识库</ToggleButton><ToggleButton value="all" sx={{ color: "inherit" }}>全部数据</ToggleButton></ToggleButtonGroup><Button color="inherit" onClick={() => void load()}>刷新</Button></Toolbar></AppBar><Drawer variant="permanent" sx={{ width: drawerWidth, flexShrink: 0, "& .MuiDrawer-paper": { width: drawerWidth, boxSizing: "border-box", borderRight: 1, borderColor: "divider" } }}><Toolbar /><List>{nav.map(([key, , icon]) => <ListItemButton key={key} selected={page === key && !detail} onClick={() => { setDetail(null); setPage(key); }}><ListItemIcon>{icon}</ListItemIcon><ListItemText primary={key === "overview" ? "总览" : key === "cases" ? "案例" : "科研分析"} /></ListItemButton>)}</List><Divider /><Box sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">仅本地运行<br />API：127.0.0.1:8787</Typography></Box></Drawer><Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 }, pt: { xs: 11, md: 12 }, maxWidth: 1600, width: "100%" }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}。请先运行 <code>python -m redteam_memory serve</code>。</Alert>}{!overview || !research ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 300 }}><CircularProgress /> </Box> : detail ? <DetailPage detail={detail} close={() => setDetail(null)} /> : page === "overview" ? <OverviewPage overview={overview} selectCase={selectCase} /> : page === "cases" ? <CasesPage rows={cases} selectCase={selectCase} /> : <ResearchPage summary={research} />}</Box></Box></ThemeProvider>;
+  return <ThemeProvider theme={theme}><CssBaseline /><Box sx={{ display: "flex", minHeight: "100vh" }}>
+    <AppBar position="fixed" elevation={0} sx={{ zIndex: (value) => value.zIndex.drawer + 1, borderBottom: 1, borderColor: "divider", backgroundColor: "background.default" }}><Toolbar sx={{ minHeight: { xs: 64, md: 72 } }}><HubRoundedIcon sx={{ mr: 1.25, color: "primary.main" }} /><Typography variant="h6" sx={{ flexGrow: 1 }}>LLM 红队助手</Typography><ToggleButtonGroup size="small" value={source} exclusive onChange={(_, value) => { if (value) { setSource(value); setDetail(null); } }} sx={{ mr: 1.5 }}><ToggleButton value="user-kb">我的知识库</ToggleButton><ToggleButton value="all">全部数据</ToggleButton></ToggleButtonGroup><Button color="inherit" onClick={() => void load()}>刷新</Button></Toolbar></AppBar>
+    <Drawer variant="permanent" sx={{ width: drawerWidth, flexShrink: 0, "& .MuiDrawer-paper": { width: drawerWidth, boxSizing: "border-box", borderRight: 1, borderColor: "divider", backgroundImage: "none" } }}><Toolbar sx={{ minHeight: { xs: 64, md: 72 } }} /><List sx={{ px: 1.25, pt: 2 }}>{nav.map(([key, label, icon]) => <ListItemButton key={key} selected={page === key && !detail} onClick={() => go(key)} sx={{ borderRadius: 1.5, mb: 0.5 }}><ListItemIcon>{icon}</ListItemIcon><ListItemText primary={label} /></ListItemButton>)}</List><Divider sx={{ mx: 2, my: 1 }} /><Box sx={{ px: 2.5, py: 2 }}><Stack direction="row" spacing={1} alignItems="center"><FactCheckRoundedIcon color="primary" fontSize="small" /><Typography variant="body2" fontWeight={600}>本地优先</Typography></Stack><Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>你的案例和证据保存在本机。这里不会自动把公开种子算作个人成绩。</Typography></Box></Drawer>
+    <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 }, pt: { xs: 11, md: 13 }, maxWidth: 1560, width: "100%" }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}。请先运行 <code>python -m redteam_memory serve</code>。</Alert>}{!overview || !research ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 320 }}><CircularProgress /></Box> : detail ? <DetailPage detail={detail} close={() => setDetail(null)} /> : page === "home" ? <HomePage overview={overview} rows={cases} selectCase={selectCase} goToCases={() => go("cases")} goToExperience={() => go("experience")} openIntake={() => setIntakeOpen(true)} /> : page === "cases" ? <CasesPage rows={cases} selectCase={selectCase} /> : page === "experience" ? <ExperiencePage rows={cases} selectCase={selectCase} /> : <ResearchPage summary={research} />}</Box>
+    <Dialog open={intakeOpen} onClose={() => setIntakeOpen(false)} maxWidth="sm" fullWidth><DialogTitle>导入一个新关卡</DialogTitle><DialogContent dividers><Stack spacing={2}><Typography>第一版采用结构化 JSON 导入，目的是保留题目、授权范围、成功判据和已有对话，避免以后只能靠截图回忆上下文。</Typography><Paper variant="outlined" sx={{ p: 1.5, backgroundColor: "background.default" }}><Typography component="code" variant="body2">python -m redteam_memory intake import examples/challenge-intake.example.json</Typography></Paper><Typography variant="body2" color="text.secondary">可先复制 <code>examples/challenge-intake.example.json</code>，把题目内容和授权范围填进去。导入后在“我的案例”中打开它，再匹配历史经验、创建计划并记录响应。</Typography></Stack></DialogContent><DialogActions><Button onClick={() => setIntakeOpen(false)}>知道了</Button><Button variant="contained" onClick={() => { setIntakeOpen(false); go("cases"); }}>打开我的案例</Button></DialogActions></Dialog>
+  </Box></ThemeProvider>;
 }
 
 createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>);
