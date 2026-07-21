@@ -15,6 +15,7 @@ from .executor_profiles import normalize_pyrit_profile, pyrit_readiness, pyrit_w
 from .campaign_exports import build_campaign_manifest
 from .external_results import import_campaign_results
 from .llm_planning import generate_reviewable_llm_plan, normalize_planner_profile
+from .pyrit_quickstart import run_native_demo
 from .research import case_rows, paper_packet, research_cross_tabs, research_summary
 from .state import recommend_next
 from .store import MemoryStore
@@ -335,6 +336,15 @@ def create_app(db_path: str | Path):
     def pyrit_workbench() -> dict[str, Any]:
         with with_store() as store:
             return pyrit_workbench_summary(store)
+
+    @app.post("/api/pyrit/quickstart/run")
+    def pyrit_quickstart(payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return run_native_demo(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     @app.get("/api/research/summary")
     def research(source: str | None = None) -> dict[str, Any]:

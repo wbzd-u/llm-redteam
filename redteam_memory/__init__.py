@@ -9,6 +9,7 @@ from .llm_provider import OpenAICompatiblePlanner, ProviderError
 from .campaign import create_campaign, create_reviewed_campaign, load_campaign_inputs, run_campaign, run_saved_replay_campaign
 from .execution_artifacts import compile_execution_artifacts
 from .executor_profiles import normalize_pyrit_profile, pyrit_readiness, pyrit_workbench_summary
+from .pyrit_quickstart import run_native_demo
 from .campaign_exports import build_campaign_manifest
 from .external_results import import_campaign_results, load_result_package
 from .llm_planning import generate_reviewable_llm_plan, normalize_planner_profile
@@ -57,6 +58,7 @@ __all__ = [
     "normalize_pyrit_profile",
     "pyrit_readiness",
     "pyrit_workbench_summary",
+    "run_native_demo",
     "build_campaign_manifest",
     "import_campaign_results",
     "load_result_package",

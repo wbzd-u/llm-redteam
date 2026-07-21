@@ -17,14 +17,15 @@ import HubRoundedIcon from "@mui/icons-material/HubRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import PlayCircleOutlineRoundedIcon from "@mui/icons-material/PlayCircleOutlineRounded";
 import RouteRoundedIcon from "@mui/icons-material/RouteRounded";
+import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
 import ScienceRoundedIcon from "@mui/icons-material/ScienceRounded";
 import { BarChart } from "@mui/x-charts/BarChart";
 import { api } from "./api";
 import { theme } from "./theme";
-import type { CaseDetail, CaseRow, ExecutionArtifacts, Overview, PaperPacket, PlannerProfile, PyRITProfile, PyRITWorkbench, ResearchSummary, TaskWorkspace } from "./types";
+import type { CaseDetail, CaseRow, ExecutionArtifacts, Overview, PaperPacket, PlannerProfile, PyRITProfile, PyRITQuickstartResult, PyRITWorkbench, ResearchSummary, TaskWorkspace } from "./types";
 
 const drawerWidth = 256;
-type Page = "home" | "cases" | "experience" | "pyrit" | "research";
+type Page = "learn" | "home" | "cases" | "experience" | "pyrit" | "research";
 
 const statusLabel: Record<string, string> = {
   confirmed: "历史已通关", probing: "正在探索", baseline: "已建立基线", verification: "等待验证",
@@ -32,6 +33,7 @@ const statusLabel: Record<string, string> = {
   failed: "未成功", negative: "负例", reported: "历史报告", running: "正在运行", pending: "等待执行", approved: "已批准",
   draft: "草稿", verified: "已验证", unverified: "未验证", unknown: "待整理",
   refused: "被拒绝", error: "出错",
+  undetermined: "未评分", success: "成功", failure: "失败",
 };
 
 function StatusChip({ value }: { value: string }) {
@@ -212,6 +214,53 @@ function ResearchPage({ summary, packet }: { summary: ResearchSummary; packet: P
   return <Stack spacing={3}><Box><Typography variant="h4">机制研究工作台</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>把案例变成机制、把机制变成可复现实验、再把实验变成论文可用的数据和论证。</Typography></Box><Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable"><Tab label={`机制地图 (${matrix.length})`} /><Tab label="数据准备度" /><Tab label="论文数据包" /></Tabs>{content[tab]}</Stack>;
 }
 
+function PyRITLearnPage() {
+  const [prompt, setPrompt] = useState("PyRIT 学习样本：验证文本如何经过攻击策略到达目标。");
+  const [converter, setConverter] = useState<"raw" | "base64">("raw");
+  const [result, setResult] = useState<PyRITQuickstartResult | null>(null);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = async () => {
+    setRunning(true); setError(null);
+    try { setResult(await api.runPyritQuickstart(prompt, converter)); }
+    catch (err) { setError(err instanceof Error ? err.message : "PyRIT 演示运行失败"); }
+    finally { setRunning(false); }
+  };
+  const stages = [
+    ["1", "Objective", "你想测试的目标描述"], ["2", "Attack", "PromptSendingAttack 生成并发送消息"],
+    ["3", "Target", "TextTarget 离线接收消息"], ["4", "Result", "AttackResult 记录轮数、结果与元数据"],
+  ];
+  return <Stack spacing={3.5}>
+    <Box sx={{ maxWidth: 830 }}>
+      <Typography variant="overline" color="primary.main" fontWeight={700}>先学 PyRIT，再接真实任务</Typography>
+      <Typography variant="h3" sx={{ mt: 0.4 }}>只看懂一条最小执行链。</Typography>
+      <Typography color="text.secondary" sx={{ mt: 1.1, fontSize: "1.02rem" }}>下面运行的是 PyRIT 原生对象，不访问网络、不调用模型、不读取你的 Cookie。它的唯一目的，是让你亲眼看到一个 Attack 如何把输入交给 Target，并生成 AttackResult。</Typography>
+    </Box>
+    <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 } }}>
+      <Grid container spacing={0}>{stages.map(([number, title, detail], index) => <Grid key={title} size={{ xs: 12, sm: 6, lg: 3 }}><Box sx={{ display: "flex", gap: 1.25, pr: { lg: 2 }, pb: { xs: 1.5, lg: 0 }, minHeight: 92 }}><Box sx={{ width: 30, height: 30, borderRadius: "50%", display: "grid", placeItems: "center", bgcolor: index === 3 ? "success.main" : "primary.main", color: "common.white", fontWeight: 700, flexShrink: 0 }}>{number}</Box><Box><Typography fontWeight={700}>{title}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{detail}</Typography></Box></Box></Grid>)}</Grid>
+    </Paper>
+    <Grid container spacing={2.5}>
+      <Grid size={{ xs: 12, lg: 6 }}><Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 }, height: "100%" }}>
+        <Typography variant="h5">运行一次离线实验</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.6, mb: 2 }}>先保持默认文本。切换 Converter 后，PyRIT 会在发送给 TextTarget 前转换它。</Typography>
+        <TextField label="Objective（学习用文本）" value={prompt} onChange={(event) => setPrompt(event.target.value)} multiline minRows={4} fullWidth helperText="这里不是攻击载荷，只是传给 PyRIT 的学习样本。" />
+        <Typography variant="subtitle2" sx={{ mt: 2 }}>可选转换器</Typography>
+        <ToggleButtonGroup size="small" exclusive value={converter} onChange={(_, value) => value && setConverter(value)} sx={{ mt: 0.75 }}><ToggleButton value="raw">不转换</ToggleButton><ToggleButton value="base64">Base64</ToggleButton></ToggleButtonGroup>
+        <Button variant="contained" startIcon={<PlayCircleOutlineRoundedIcon />} disabled={running || !prompt.trim()} onClick={() => void run()} sx={{ mt: 2.5 }}>{running ? "PyRIT 正在运行…" : "运行原生 PyRIT 演示"}</Button>
+        {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+      </Paper></Grid>
+      <Grid size={{ xs: 12, lg: 6 }}><Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 }, height: "100%", borderLeft: 4, borderLeftColor: result ? "success.main" : "divider" }}>
+        <Typography variant="h5">你会看到的结果</Typography>
+        {!result ? <Typography color="text.secondary" sx={{ mt: 1.25, lineHeight: 1.8 }}>点击运行后，这里会显示 PyRIT 实际发送给 Target 的文本，以及原生 AttackResult。因为 TextTarget 不回答、没有配置 Scorer，结果应为 <code>undetermined</code>；这不是失败，而是说明评分器在 PyRIT 中是独立组件。</Typography> : <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+          <Box><Typography variant="caption" color="text.secondary">实际发送给 TextTarget 的内容</Typography><Paper variant="outlined" sx={{ p: 1.4, mt: 0.45, bgcolor: "action.hover", overflowWrap: "anywhere" }}><Typography component="code" variant="body2">{result.sent_to_target}</Typography></Paper></Box>
+          <Grid container spacing={1.25}><Grid size={6}><Typography variant="caption" color="text.secondary">执行策略</Typography><Typography fontWeight={700}>{result.strategy}</Typography></Grid><Grid size={6}><Typography variant="caption" color="text.secondary">执行轮数</Typography><Typography fontWeight={700}>{result.attack_result.executed_turns}</Typography></Grid><Grid size={6}><Typography variant="caption" color="text.secondary">结果</Typography><StatusChip value={result.attack_result.outcome} /></Grid><Grid size={6}><Typography variant="caption" color="text.secondary">耗时</Typography><Typography fontWeight={700}>{result.attack_result.execution_time_ms} ms</Typography></Grid></Grid>
+          <Alert severity="info">{result.attack_result.outcome_reason || "未提供结果原因"}</Alert>
+        </Stack>}
+      </Paper></Grid>
+    </Grid>
+    <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 } }}><Typography variant="h6">看懂这一步以后，你已经掌握了什么？</Typography><Grid container spacing={2} sx={{ mt: 0.5 }}><Grid size={{ xs: 12, md: 4 }}><Typography fontWeight={700}>Attack 不等于输入</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>攻击策略负责组织和执行；同一策略可以换 Converter、Target 和 Scorer。</Typography></Grid><Grid size={{ xs: 12, md: 4 }}><Typography fontWeight={700}>Target 不等于模型</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>TextTarget 只展示消息；以后可替换为 HTTP、API、网页或本地模型目标。</Typography></Grid><Grid size={{ xs: 12, md: 4 }}><Typography fontWeight={700}>结果不等于通关</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>AttackResult 记录执行事实；真实成功仍应由平台、工具或 UI 证据确认。</Typography></Grid></Grid></Paper>
+  </Stack>;
+}
+
 function PyRITWorkbenchPage({ workbench, openTask }: { workbench: PyRITWorkbench; openTask: (id: string) => void }) {
   const stageTone = (stage: string) => stage === "现在可用" ? "success" : stage === "下一步接入" ? "primary" : "default";
   const roadmap = [
@@ -358,7 +407,7 @@ function DetailPage({ detail, close }: { detail: CaseDetail; close: () => void }
 }
 
 function App() {
-  const [page, setPage] = useState<Page>("home");
+  const [page, setPage] = useState<Page>("learn");
   const [source, setSource] = useState("user-kb");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [cases, setCases] = useState<CaseRow[]>([]);
@@ -376,12 +425,12 @@ function App() {
   const submitTask = async () => { if (!newTask.title.trim()) { setError("请至少填写任务名称。"); return; } setCreatingTask(true); try { const result = await api.createTask({ title: newTask.title, target: newTask.target, challenge: newTask.challenge, authorization_scope: newTask.authorization, success_criteria: newTask.successCriteria.split("\n").map((item) => item.trim()).filter(Boolean) }); setIntakeOpen(false); setNewTask({ title: "", target: "", challenge: "", successCriteria: "", authorization: "" }); await load(); await selectCase(result.case_id); } catch (err) { setError(err instanceof Error ? err.message : "创建任务失败"); } finally { setCreatingTask(false); } };
   const go = (next: Page) => { setWorkspace(null); setPage(next); };
   const nav = useMemo(() => [
-    ["home", "首页", <DashboardRoundedIcon />], ["cases", "我的案例", <FolderOpenRoundedIcon />], ["experience", "我的经验", <MenuBookRoundedIcon />], ["pyrit", "PyRIT 专栏", <RouteRoundedIcon />], ["research", "研究分析", <ScienceRoundedIcon />],
+    ["learn", "PyRIT 入门", <SchoolRoundedIcon />], ["home", "完整工作台", <DashboardRoundedIcon />], ["cases", "案例记录", <FolderOpenRoundedIcon />], ["research", "研究分析", <ScienceRoundedIcon />],
   ] as const, []);
   return <ThemeProvider theme={theme}><CssBaseline /><Box sx={{ display: "flex", minHeight: "100vh" }}>
     <AppBar position="fixed" elevation={0} sx={{ zIndex: (value) => value.zIndex.drawer + 1, borderBottom: 1, borderColor: "divider", backgroundColor: "background.default" }}><Toolbar sx={{ minHeight: { xs: 64, md: 72 } }}><HubRoundedIcon sx={{ mr: 1.25, color: "primary.main" }} /><Typography variant="h6" sx={{ flexGrow: 1 }}>LLM 红队助手</Typography><ToggleButtonGroup size="small" value={source} exclusive onChange={(_, value) => { if (value) { setSource(value); setWorkspace(null); } }} sx={{ mr: 1.5 }}><ToggleButton value="user-kb">我的知识库</ToggleButton><ToggleButton value="all">全部数据</ToggleButton></ToggleButtonGroup><Button color="inherit" onClick={() => void load()}>刷新</Button></Toolbar></AppBar>
     <Drawer variant="permanent" sx={{ width: drawerWidth, flexShrink: 0, "& .MuiDrawer-paper": { width: drawerWidth, boxSizing: "border-box", borderRight: 1, borderColor: "divider", backgroundImage: "none" } }}><Toolbar sx={{ minHeight: { xs: 64, md: 72 } }} /><List sx={{ px: 1.25, pt: 2 }}>{nav.map(([key, label, icon]) => <ListItemButton key={key} selected={page === key && !workspace} onClick={() => go(key)} sx={{ borderRadius: 1.5, mb: 0.5 }}><ListItemIcon>{icon}</ListItemIcon><ListItemText primary={label} /></ListItemButton>)}</List><Divider sx={{ mx: 2, my: 1 }} /><Box sx={{ px: 2.5, py: 2 }}><Stack direction="row" spacing={1} alignItems="center"><FactCheckRoundedIcon color="primary" fontSize="small" /><Typography variant="body2" fontWeight={600}>本地优先</Typography></Stack><Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>你的案例和证据保存在本机。这里不会自动把公开种子算作个人成绩。</Typography></Box></Drawer>
-    <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 }, pt: { xs: 11, md: 13 }, maxWidth: 1560, width: "100%" }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}。请先运行 <code>python -m redteam_memory serve</code>。</Alert>}{!overview || !research || !paperPacket || !pyritWorkbench ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 320 }}><CircularProgress /></Box> : workspace ? <TaskWorkspacePage workspace={workspace} close={() => setWorkspace(null)} refresh={async () => { await load(); setWorkspace(await api.taskWorkspace(workspace.task.case_id)); }} /> : page === "home" ? <HomePage overview={overview} rows={cases} selectCase={selectCase} goToCases={() => go("cases")} goToExperience={() => go("experience")} openIntake={() => setIntakeOpen(true)} /> : page === "cases" ? <CasesPage rows={cases} selectCase={selectCase} /> : page === "experience" ? <ExperiencePage rows={cases} goToCases={() => go("cases")} /> : page === "pyrit" ? <PyRITWorkbenchPage workbench={pyritWorkbench} openTask={selectCase} /> : <ResearchPage summary={research} packet={paperPacket} />}</Box>
+    <Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 }, pt: { xs: 11, md: 13 }, maxWidth: 1560, width: "100%" }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}。请先运行 <code>python -m redteam_memory serve</code>。</Alert>}{!overview || !research || !paperPacket || !pyritWorkbench ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 320 }}><CircularProgress /></Box> : workspace ? <TaskWorkspacePage workspace={workspace} close={() => setWorkspace(null)} refresh={async () => { await load(); setWorkspace(await api.taskWorkspace(workspace.task.case_id)); }} /> : page === "learn" ? <PyRITLearnPage /> : page === "home" ? <HomePage overview={overview} rows={cases} selectCase={selectCase} goToCases={() => go("cases")} goToExperience={() => go("experience")} openIntake={() => setIntakeOpen(true)} /> : page === "cases" ? <CasesPage rows={cases} selectCase={selectCase} /> : page === "experience" ? <ExperiencePage rows={cases} goToCases={() => go("cases")} /> : page === "pyrit" ? <PyRITWorkbenchPage workbench={pyritWorkbench} openTask={selectCase} /> : <ResearchPage summary={research} packet={paperPacket} />}</Box>
     <Dialog open={intakeOpen} onClose={() => setIntakeOpen(false)} maxWidth="md" fullWidth><DialogTitle>开始一个新任务</DialogTitle><DialogContent dividers><Stack spacing={2}><Typography color="text.secondary">先记录你已经知道的事实。创建后会直接进入任务控制台，由机制匹配和实验草稿帮助你推进。</Typography><TextField autoFocus required label="任务名称" value={newTask.title} onChange={(event) => setNewTask({ ...newTask, title: event.target.value })} fullWidth placeholder="例如：某关卡的会话状态研究" /><TextField label="目标 / 模型" value={newTask.target} onChange={(event) => setNewTask({ ...newTask, target: event.target.value })} fullWidth placeholder="例如：关卡名称、模型或本地沙箱" /><TextField label="题目与当前已知上下文" value={newTask.challenge} onChange={(event) => setNewTask({ ...newTask, challenge: event.target.value })} multiline minRows={4} fullWidth /><TextField label="成功判据（每行一条）" value={newTask.successCriteria} onChange={(event) => setNewTask({ ...newTask, successCriteria: event.target.value })} multiline minRows={3} fullWidth /><TextField label="授权范围与约束" value={newTask.authorization} onChange={(event) => setNewTask({ ...newTask, authorization: event.target.value })} multiline minRows={2} fullWidth /></Stack></DialogContent><DialogActions><Button onClick={() => setIntakeOpen(false)}>取消</Button><Button variant="contained" disabled={creatingTask} onClick={() => void submitTask()}>创建并进入任务</Button></DialogActions></Dialog>
   </Box></ThemeProvider>;
 }

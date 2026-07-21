@@ -33,6 +33,19 @@ def test_local_dashboard_api_exposes_read_only_case_and_research_data(tmp_path):
     assert filtered["summary"]["totals"]["cases"] == 0
 
 
+def test_pyrit_quickstart_endpoint_returns_native_result_shape(tmp_path, monkeypatch):
+    monkeypatch.setattr("redteam_memory.web_api.run_native_demo", lambda payload: {
+        "strategy": "PromptSendingAttack", "target": "TextTarget (offline)",
+        "converter": payload["converter"], "sent_to_target": f"user: {payload['prompt']}",
+        "attack_result": {"executed_turns": 1, "outcome": "undetermined"},
+    })
+    client = TestClient(create_app(tmp_path / "memory.sqlite3"))
+    response = client.post("/api/pyrit/quickstart/run", json={"prompt": "sample", "converter": "raw"})
+    assert response.status_code == 200
+    assert response.json()["strategy"] == "PromptSendingAttack"
+    assert response.json()["attack_result"]["executed_turns"] == 1
+
+
 def test_task_workspace_creates_task_draft_and_observation(tmp_path):
     db = tmp_path / "memory.sqlite3"
     client = TestClient(create_app(db))

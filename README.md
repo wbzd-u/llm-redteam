@@ -267,6 +267,16 @@ Dashboard 中的“PyRIT 专栏”将 PyRIT 从任务页中的一个选项提升
 
 这个分层很重要：专栏会把“已接入”“待接入”“需要配置”清楚区分；不会把尚未实施的 PyRIT 策略伪装成已经可以运行的功能。
 
+### PyRIT 入门模式
+
+Dashboard 默认打开“PyRIT 入门”。它只演示一个最小、离线的原生闭环：
+
+```text
+Objective -> PromptSendingAttack -> TextTarget -> AttackResult
+```
+
+可选的 `Base64Converter` 会在发送前转换学习文本。`TextTarget` 只显示接收到的消息，不访问网络、不调用模型，也不读取请求模板或凭据；返回 `undetermined` 且原因是“没有配置 Scorer”是预期结果。理解这一页后，再逐步切换到 HTTP Target、Scorer 和固定多轮策略。
+
 准备一份带 `{PROMPT}` 占位符的 Burp 风格请求文件。默认只做 dry-run，只有显式添加 `--execute` 才会访问目标：
 
 ```powershell

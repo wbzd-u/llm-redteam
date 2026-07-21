@@ -193,6 +193,24 @@ export interface PyRITWorkbench {
   };
 }
 
+export interface PyRITQuickstartResult {
+  strategy: string;
+  target: string;
+  converter: "raw" | "base64";
+  sent_to_target: string;
+  attack_result: {
+    attack_result_id: string;
+    conversation_id: string;
+    objective: string;
+    executed_turns: number;
+    outcome: string;
+    outcome_reason: string | null;
+    execution_time_ms: number;
+    labels: Record<string, string>;
+    metadata: Record<string, unknown>;
+  };
+}
+
 export interface ResearchHypothesis extends PlanHypothesis {
   mechanism_id: string;
   mechanism: string;
