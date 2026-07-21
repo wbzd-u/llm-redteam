@@ -7,6 +7,9 @@ export interface ResearchSummary {
     campaigns: number;
     confirmed_cases: number;
     confirmed_case_rate: number;
+    historical_confirmed_cases: number;
+    historical_confirmed_rate: number;
+    user_kb_cases: number;
     reproduced_cases: number;
     reproduced_case_rate: number;
     observed_cost: number;
@@ -14,6 +17,7 @@ export interface ResearchSummary {
   cases_by_target: Counts;
   cases_by_carrier: Counts;
   cases_by_language: Counts;
+  cases_by_source: Counts;
   cases_by_stage: Counts;
   attempts_by_outcome: Counts;
   campaigns_by_status: Counts;
@@ -29,6 +33,7 @@ export interface CaseRow {
   status: string;
   stage: string;
   language: string;
+  source: string;
   tags: string[];
   attempt_count: number;
   turn_count: number;

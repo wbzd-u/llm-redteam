@@ -5,6 +5,7 @@ import {
   List, ListItemButton, ListItemIcon, ListItemText, Paper, Stack, Toolbar,
   Typography, ThemeProvider, Button, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Tabs, Tab,
+  ToggleButton, ToggleButtonGroup,
 } from "@mui/material";
 import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
 import FolderOpenRoundedIcon from "@mui/icons-material/FolderOpenRounded";
@@ -66,8 +67,9 @@ function OverviewPage({ overview, selectCase }: { overview: Overview; selectCase
   return <Stack spacing={3}>
     <Box><Typography variant="h4">研究总览</Typography><Typography color="text.secondary">以证据为核心的本地红队实验工作台。</Typography></Box>
     <Stack direction="row" flexWrap="wrap" gap={2}>
-      <Metric label="案例" value={totals.cases} detail={`${totals.attempts} 次已记录尝试`} />
-      <Metric label="已确认" value={`${(totals.confirmed_case_rate * 100).toFixed(0)}%`} detail={`${totals.confirmed_cases} 个案例有已验证运行时证据`} />
+      <Metric label="我的知识库" value={totals.user_kb_cases} detail={`${totals.cases} 个当前筛选范围案例`} />
+      <Metric label="历史已通关" value={`${(totals.historical_confirmed_rate * 100).toFixed(0)}%`} detail={`${totals.historical_confirmed_cases} 条来自你的通关记录`} />
+      <Metric label="运行时证据" value={`${(totals.confirmed_case_rate * 100).toFixed(0)}%`} detail={`${totals.confirmed_cases} 个案例有结构化平台证据`} />
       <Metric label="可复现" value={`${(totals.reproduced_case_rate * 100).toFixed(0)}%`} detail={`${totals.reproduced_cases} 个案例至少确认两次`} />
       <Metric label="Campaign" value={totals.campaigns} detail={`记录成本：${totals.observed_cost}`} />
     </Stack>
@@ -107,18 +109,19 @@ function ResearchPage({ summary }: { summary: ResearchSummary }) {
 
 function App() {
   const [page, setPage] = useState<Page>("overview");
+  const [source, setSource] = useState("user-kb");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [research, setResearch] = useState<ResearchSummary | null>(null);
   const [detail, setDetail] = useState<CaseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const load = async () => { try { setError(null); const [nextOverview, nextCases, nextResearch] = await Promise.all([api.overview(), api.cases(), api.research()]); setOverview(nextOverview); setCases(nextCases); setResearch(nextResearch); } catch (err) { setError(err instanceof Error ? err.message : "Could not load local API"); } };
-  useEffect(() => { void load(); }, []);
+  const load = async (nextSource = source) => { try { setError(null); const [nextOverview, nextCases, nextResearch] = await Promise.all([api.overview(nextSource), api.cases(nextSource), api.research(nextSource)]); setOverview(nextOverview); setCases(nextCases); setResearch(nextResearch); } catch (err) { setError(err instanceof Error ? err.message : "Could not load local API"); } };
+  useEffect(() => { void load(source); }, [source]);
   const selectCase = async (caseId: string) => { try { setDetail(await api.caseDetail(caseId)); } catch (err) { setError(err instanceof Error ? err.message : "Could not load case"); } };
   const nav = useMemo(() => [
     ["overview", "Overview", <DashboardRoundedIcon />], ["cases", "Cases", <FolderOpenRoundedIcon />], ["research", "Research", <ScienceRoundedIcon />],
   ] as const, []);
-  return <ThemeProvider theme={theme}><CssBaseline /><Box sx={{ display: "flex", minHeight: "100vh" }}><AppBar position="fixed" elevation={0} sx={{ zIndex: (value) => value.zIndex.drawer + 1, borderBottom: 1, borderColor: "divider" }}><Toolbar><HubRoundedIcon sx={{ mr: 1.5 }} /><Typography variant="h6" sx={{ flexGrow: 1 }}>LLM 红队研究工作台</Typography><Button color="inherit" onClick={() => void load()}>刷新</Button></Toolbar></AppBar><Drawer variant="permanent" sx={{ width: drawerWidth, flexShrink: 0, "& .MuiDrawer-paper": { width: drawerWidth, boxSizing: "border-box", borderRight: 1, borderColor: "divider" } }}><Toolbar /><List>{nav.map(([key, , icon]) => <ListItemButton key={key} selected={page === key && !detail} onClick={() => { setDetail(null); setPage(key); }}><ListItemIcon>{icon}</ListItemIcon><ListItemText primary={key === "overview" ? "总览" : key === "cases" ? "案例" : "科研分析"} /></ListItemButton>)}</List><Divider /><Box sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">仅本地运行<br />API：127.0.0.1:8787</Typography></Box></Drawer><Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 }, pt: { xs: 11, md: 12 }, maxWidth: 1600, width: "100%" }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}。请先运行 <code>python -m redteam_memory serve</code>。</Alert>}{!overview || !research ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 300 }}><CircularProgress /> </Box> : detail ? <DetailPage detail={detail} close={() => setDetail(null)} /> : page === "overview" ? <OverviewPage overview={overview} selectCase={selectCase} /> : page === "cases" ? <CasesPage rows={cases} selectCase={selectCase} /> : <ResearchPage summary={research} />}</Box></Box></ThemeProvider>;
+  return <ThemeProvider theme={theme}><CssBaseline /><Box sx={{ display: "flex", minHeight: "100vh" }}><AppBar position="fixed" elevation={0} sx={{ zIndex: (value) => value.zIndex.drawer + 1, borderBottom: 1, borderColor: "divider" }}><Toolbar><HubRoundedIcon sx={{ mr: 1.5 }} /><Typography variant="h6" sx={{ flexGrow: 1 }}>LLM 红队研究工作台</Typography><ToggleButtonGroup size="small" value={source} exclusive onChange={(_, value) => { if (value) { setSource(value); setDetail(null); } }} sx={{ mr: 2, backgroundColor: "rgba(255,255,255,.06)" }}><ToggleButton value="user-kb" sx={{ color: "inherit" }}>我的知识库</ToggleButton><ToggleButton value="all" sx={{ color: "inherit" }}>全部数据</ToggleButton></ToggleButtonGroup><Button color="inherit" onClick={() => void load()}>刷新</Button></Toolbar></AppBar><Drawer variant="permanent" sx={{ width: drawerWidth, flexShrink: 0, "& .MuiDrawer-paper": { width: drawerWidth, boxSizing: "border-box", borderRight: 1, borderColor: "divider" } }}><Toolbar /><List>{nav.map(([key, , icon]) => <ListItemButton key={key} selected={page === key && !detail} onClick={() => { setDetail(null); setPage(key); }}><ListItemIcon>{icon}</ListItemIcon><ListItemText primary={key === "overview" ? "总览" : key === "cases" ? "案例" : "科研分析"} /></ListItemButton>)}</List><Divider /><Box sx={{ p: 2 }}><Typography variant="caption" color="text.secondary">仅本地运行<br />API：127.0.0.1:8787</Typography></Box></Drawer><Box component="main" sx={{ flexGrow: 1, p: { xs: 2, md: 4 }, pt: { xs: 11, md: 12 }, maxWidth: 1600, width: "100%" }}>{error && <Alert severity="error" sx={{ mb: 2 }}>{error}。请先运行 <code>python -m redteam_memory serve</code>。</Alert>}{!overview || !research ? <Box sx={{ display: "grid", placeItems: "center", minHeight: 300 }}><CircularProgress /> </Box> : detail ? <DetailPage detail={detail} close={() => setDetail(null)} /> : page === "overview" ? <OverviewPage overview={overview} selectCase={selectCase} /> : page === "cases" ? <CasesPage rows={cases} selectCase={selectCase} /> : <ResearchPage summary={research} />}</Box></Box></ThemeProvider>;
 }
 
 createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>);

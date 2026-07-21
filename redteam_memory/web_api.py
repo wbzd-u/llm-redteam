@@ -36,18 +36,18 @@ def create_app(db_path: str | Path):
         return {"status": "ok", "db_path": str(db_path)}
 
     @app.get("/api/overview")
-    def overview() -> dict[str, Any]:
+    def overview(source: str | None = None) -> dict[str, Any]:
         with with_store() as store:
-            rows = case_rows(store)
+            rows = case_rows(store, source=source)
             return {
-                "summary": research_summary(store),
+                "summary": research_summary(store, source=source),
                 "recent_cases": sorted(rows, key=lambda item: item["case_id"], reverse=True)[:8],
             }
 
     @app.get("/api/cases")
-    def cases() -> list[dict[str, Any]]:
+    def cases(source: str | None = None) -> list[dict[str, Any]]:
         with with_store() as store:
-            return case_rows(store)
+            return case_rows(store, source=source)
 
     @app.get("/api/cases/{case_id}")
     def case_detail(case_id: str) -> dict[str, Any]:
@@ -63,8 +63,8 @@ def create_app(db_path: str | Path):
             return store.list_mechanism_cards()
 
     @app.get("/api/research/summary")
-    def research() -> dict[str, Any]:
+    def research(source: str | None = None) -> dict[str, Any]:
         with with_store() as store:
-            return research_summary(store)
+            return research_summary(store, source=source)
 
     return app

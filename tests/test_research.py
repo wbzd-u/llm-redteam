@@ -26,6 +26,7 @@ def test_cross_case_research_summary_and_exports(tmp_path):
 
     assert summary["totals"]["cases"] == 2
     assert summary["totals"]["confirmed_cases"] == 1
+    assert summary["totals"]["historical_confirmed_cases"] == 0
     assert summary["cases_by_language"] == {"en": 1, "zh": 1}
     with csv_path.open(encoding="utf-8", newline="") as handle:
         assert len(list(csv.DictReader(handle))) == 2

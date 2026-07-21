@@ -1,6 +1,7 @@
 import type { CaseDetail, CaseRow, Overview, ResearchSummary } from "./types";
 
 const baseUrl = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8787";
+const sourceQuery = (source: string) => source === "all" ? "" : `?source=${encodeURIComponent(source)}`;
 
 async function get<T>(path: string): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`);
@@ -9,8 +10,8 @@ async function get<T>(path: string): Promise<T> {
 }
 
 export const api = {
-  overview: () => get<Overview>("/api/overview"),
-  cases: () => get<CaseRow[]>("/api/cases"),
+  overview: (source = "user-kb") => get<Overview>(`/api/overview${sourceQuery(source)}`),
+  cases: (source = "user-kb") => get<CaseRow[]>(`/api/cases${sourceQuery(source)}`),
   caseDetail: (caseId: string) => get<CaseDetail>(`/api/cases/${encodeURIComponent(caseId)}`),
-  research: () => get<ResearchSummary>("/api/research/summary"),
+  research: (source = "user-kb") => get<ResearchSummary>(`/api/research/summary${sourceQuery(source)}`),
 };

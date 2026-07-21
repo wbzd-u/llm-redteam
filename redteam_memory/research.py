@@ -22,7 +22,18 @@ def _language(tags: list[str]) -> str:
     return "und"
 
 
-def case_rows(store: MemoryStore) -> list[dict[str, Any]]:
+def _source(tags: list[str]) -> str:
+    for tag in tags:
+        if tag.lower().startswith("source:"):
+            return tag.split(":", 1)[1].strip() or "unknown"
+    if any("ipi" in tag.lower() for tag in tags):
+        return "ipi-arena"
+    if any("jailbreak" in tag.lower() for tag in tags):
+        return "jailbreaker-ce"
+    return "unknown"
+
+
+def case_rows(store: MemoryStore, *, source: str | None = None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for summary in store.list_cases():
         bundle = store.get_case(summary["case_id"])
@@ -30,7 +41,7 @@ def case_rows(store: MemoryStore) -> list[dict[str, Any]]:
             continue
         attempts = bundle.get("attempts", [])
         campaigns = bundle.get("campaigns", [])
-        rows.append({
+        row = {
             "case_id": bundle["case_id"],
             "title": bundle["title"],
             "target": bundle["target"] or "unknown",
@@ -39,6 +50,7 @@ def case_rows(store: MemoryStore) -> list[dict[str, Any]]:
             "status": bundle["status"],
             "stage": derive_stage(bundle),
             "language": _language(bundle.get("tags", [])),
+            "source": _source(bundle.get("tags", [])),
             "tags": bundle.get("tags", []),
             "attempt_count": len(attempts),
             "turn_count": len(bundle.get("turns", [])),
@@ -53,7 +65,9 @@ def case_rows(store: MemoryStore) -> list[dict[str, Any]]:
             "attempt_outcomes": [str(item.get("outcome", "unknown")) for item in attempts],
             "campaign_statuses": [str(item.get("status", "pending")) for item in campaigns],
             "mechanism_relations": [str(item.get("relation", "candidate")) for item in bundle.get("mechanism_links", [])],
-        })
+        }
+        if source is None or row["source"] == source:
+            rows.append(row)
     return rows
 
 
@@ -61,13 +75,15 @@ def _counts(values: list[str]) -> dict[str, int]:
     return dict(sorted(Counter(values).items()))
 
 
-def research_summary(store: MemoryStore) -> dict[str, Any]:
-    rows = case_rows(store)
+def research_summary(store: MemoryStore, *, source: str | None = None) -> dict[str, Any]:
+    rows = case_rows(store, source=source)
     attempt_outcomes = [outcome for row in rows for outcome in row["attempt_outcomes"]]
     campaign_statuses = [status for row in rows for status in row["campaign_statuses"]]
     mechanism_relations = [relation for row in rows for relation in row["mechanism_relations"]]
     confirmed = sum(row["confirmed"] for row in rows)
     reproducible = sum(row["reproduced"] for row in rows)
+    historical_confirmed = sum(row["source"] == "user-kb" and row["status"] == "confirmed" for row in rows)
+    user_kb_cases = sum(row["source"] == "user-kb" for row in rows)
     total_attempts = sum(row["attempt_count"] for row in rows)
     total_campaigns = sum(row["campaign_count"] for row in rows)
     return {
@@ -77,6 +93,9 @@ def research_summary(store: MemoryStore) -> dict[str, Any]:
             "campaigns": total_campaigns,
             "confirmed_cases": confirmed,
             "confirmed_case_rate": round(confirmed / len(rows), 4) if rows else 0.0,
+            "historical_confirmed_cases": historical_confirmed,
+            "historical_confirmed_rate": round(historical_confirmed / user_kb_cases, 4) if user_kb_cases else 0.0,
+            "user_kb_cases": user_kb_cases,
             "reproduced_cases": reproducible,
             "reproduced_case_rate": round(reproducible / confirmed, 4) if confirmed else 0.0,
             "observed_cost": round(sum(row["observed_cost"] for row in rows), 6),
@@ -84,6 +103,7 @@ def research_summary(store: MemoryStore) -> dict[str, Any]:
         "cases_by_target": _counts([row["target"] for row in rows]),
         "cases_by_carrier": _counts([row["carrier"] for row in rows]),
         "cases_by_language": _counts([row["language"] for row in rows]),
+        "cases_by_source": _counts([row["source"] for row in rows]),
         "cases_by_stage": _counts([row["stage"] for row in rows]),
         "attempts_by_outcome": _counts(attempt_outcomes),
         "campaigns_by_status": _counts(campaign_statuses),

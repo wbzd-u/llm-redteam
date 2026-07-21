@@ -23,3 +23,5 @@ def test_local_dashboard_api_exposes_read_only_case_and_research_data(tmp_path):
     assert client.get(f"/api/cases/{case.case_id}").json()["title"] == "dashboard case"
     assert client.get("/api/cases/unknown").status_code == 404
     assert client.get("/api/research/summary").status_code == 200
+    filtered = client.get("/api/overview?source=user-kb").json()
+    assert filtered["summary"]["totals"]["cases"] == 0
