@@ -28,7 +28,7 @@ type Page = "home" | "cases" | "experience" | "research";
 const statusLabel: Record<string, string> = {
   confirmed: "历史已通关", probing: "正在探索", baseline: "已建立基线", verification: "等待验证",
   halted: "已暂停", first_refusal: "首次被拒绝", completed: "已完成", budget_exhausted: "预算已用完",
-  failed: "未成功", running: "正在运行", pending: "等待执行", approved: "已批准",
+  failed: "未成功", negative: "负例", reported: "历史报告", running: "正在运行", pending: "等待执行", approved: "已批准",
   draft: "草稿", verified: "已验证", unverified: "未验证", unknown: "待整理",
   refused: "被拒绝", error: "出错",
 };
@@ -171,6 +171,14 @@ function CountChart({ title, data }: { title: string; data: Record<string, numbe
   </Paper>;
 }
 
+function CrossTabTable({ title, subtitle, table }: { title: string; subtitle: string; table: { columns: string[]; rows: Array<{ label: string; total: number; values: Record<string, number> }> } }) {
+  return <Paper variant="outlined" sx={{ p: 2.25, height: "100%" }}>
+    <Typography variant="h6">{title}</Typography>
+    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 1.5 }}>{subtitle}</Typography>
+    {table.rows.length ? <TableContainer><Table size="small"><TableHead><TableRow><TableCell>机制 / 分组</TableCell>{table.columns.map((column) => <TableCell key={column} align="right">{statusLabel[column] ?? column}</TableCell>)}<TableCell align="right">合计</TableCell></TableRow></TableHead><TableBody>{table.rows.map((row) => <TableRow key={row.label}><TableCell>{row.label}</TableCell>{table.columns.map((column) => <TableCell key={column} align="right">{row.values[column] ?? 0}</TableCell>)}<TableCell align="right">{row.total}</TableCell></TableRow>)}</TableBody></Table></TableContainer> : <Typography color="text.secondary">尚无机制关联记录。先把案例关联到机制卡，统计表会自动生成。</Typography>}
+  </Paper>;
+}
+
 function downloadText(filename: string, content: string, type: string) {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
@@ -207,7 +215,7 @@ function ResearchPage({ summary, packet }: { summary: ResearchSummary; packet: P
     <Stack spacing={3} key="data">
       <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 } }}><Typography variant="h5">论文数据准备度</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>这不是给数据“打高分”，而是明确哪些字段已经能写进方法，哪些还需要补实验。</Typography><Grid container spacing={2} sx={{ mt: 1 }}>{coverage.map(([label, value]) => <Grid key={label} size={{ xs: 6, md: 4, xl: 3 }}><Metric label={label} value={`${Math.round(value.rate * 100)}%`} detail={`${value.filled} / ${value.total} 个案例已记录`} tone={value.rate >= 0.75 ? "success" : "neutral"} /></Grid>)}</Grid></Paper>
       <Grid container spacing={2.25}><Grid size={{ xs: 12, lg: 7 }}><Paper variant="outlined" sx={{ p: 2.25, height: "100%" }}><Typography variant="h6">数据字典</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 1.5 }}>这些字段就是论文方法、附录和公开复现实验表的共同语言。</Typography><TableContainer><Table size="small"><TableHead><TableRow><TableCell>字段</TableCell><TableCell>含义</TableCell><TableCell>单位</TableCell></TableRow></TableHead><TableBody>{packet.data_dictionary.map((item) => <TableRow key={item.field}><TableCell><Typography component="code" variant="body2">{item.field}</Typography></TableCell><TableCell>{item.meaning}</TableCell><TableCell>{item.unit}</TableCell></TableRow>)}</TableBody></Table></TableContainer></Paper></Grid><Grid size={{ xs: 12, lg: 5 }}><Paper variant="outlined" sx={{ p: 2.25, height: "100%" }}><Typography variant="h6">下一批需要补的数据</Typography><Stack spacing={1.25} sx={{ mt: 1.5 }}>{packet.readiness.gaps.length ? packet.readiness.gaps.map((gap) => <Stack key={gap} direction="row" spacing={1} alignItems="flex-start"><AutoAwesomeRoundedIcon color="primary" fontSize="small" sx={{ mt: 0.25 }} /><Typography variant="body2">{gap}</Typography></Stack>) : <Typography color="text.secondary">当前数据满足基础描述性分析。仍应在论文中说明样本选择和外推边界。</Typography>}</Stack></Paper></Grid></Grid>
-      <Grid container spacing={2.25}><Grid size={{ xs: 12, lg: 6 }}><CountChart title="尝试结果分布" data={summary.attempts_by_outcome} /></Grid><Grid size={{ xs: 12, lg: 6 }}><CountChart title="载体分布" data={summary.cases_by_carrier} /></Grid></Grid>
+      <Grid container spacing={2.25}><Grid size={{ xs: 12, lg: 6 }}><CountChart title="尝试结果分布" data={summary.attempts_by_outcome} /></Grid><Grid size={{ xs: 12, lg: 6 }}><CountChart title="载体分布" data={summary.cases_by_carrier} /></Grid><Grid size={{ xs: 12 }}><Alert severity="info">{packet.cross_tabs.note} 当前共有 {packet.cross_tabs.linked_records} 条机制—案例关联，可作为机制覆盖统计的分母。</Alert></Grid><Grid size={{ xs: 12, xl: 6 }}><CrossTabTable title="机制 × 案例状态" subtitle="检查每个机制是否同时拥有历史通关与负例，避免只从单侧样本归纳规律。" table={packet.cross_tabs.mechanism_by_status} /></Grid><Grid size={{ xs: 12, xl: 6 }}><CrossTabTable title="机制 × 关联证据" subtitle="confirmed、observed、negative 是机制与案例的证据关系，不等同于单次模型自述。" table={packet.cross_tabs.mechanism_by_relation} /></Grid><Grid size={{ xs: 12, xl: 6 }}><CrossTabTable title="机制 × 目标" subtitle="用于判断不同机制是否只在单一目标上出现，避免过早声称跨模型迁移。" table={packet.cross_tabs.mechanism_by_target} /></Grid><Grid size={{ xs: 12, xl: 6 }}><CrossTabTable title="目标 × 载体" subtitle="用于识别哪些目标和载体组合尚未建立对照。" table={packet.cross_tabs.target_by_carrier} /></Grid></Grid>
     </Stack>,
     <Stack spacing={3} key="paper">
       <Paper variant="outlined" sx={{ p: { xs: 2.25, md: 3 } }}><Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={2}><Box><Typography variant="h5">论文数据包</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>自动整理方法草稿、机制矩阵、数据字典和局限性。它不会把原始输入或响应导出到这个页面。</Typography></Box><Stack direction="row" gap={1} flexWrap="wrap"><Button variant="outlined" onClick={() => downloadText("redteam-paper-packet.md", packet.markdown, "text/markdown;charset=utf-8")}>下载论文草稿</Button><Button variant="contained" onClick={() => downloadText("redteam-paper-data.json", JSON.stringify(packet, null, 2), "application/json;charset=utf-8")}>下载结构化数据</Button></Stack></Stack></Paper>

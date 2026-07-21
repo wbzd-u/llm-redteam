@@ -3,7 +3,7 @@ import json
 
 from redteam_memory.models import Attempt, Case, Evidence
 from redteam_memory.mechanisms import import_mechanisms
-from redteam_memory.research import mechanism_research_matrix, paper_packet, research_summary, write_case_csv, write_paper_packet, write_summary_json, write_summary_svg
+from redteam_memory.research import mechanism_research_matrix, paper_packet, research_cross_tabs, research_summary, write_case_csv, write_paper_packet, write_summary_json, write_summary_svg
 from redteam_memory.store import MemoryStore
 
 
@@ -50,6 +50,8 @@ def test_mechanism_matrix_and_paper_packet_keep_unlinked_cases_visible(tmp_path)
         store.link_mechanism_case("mechanism-test", case.case_id, relation="observed")
         matrix = mechanism_research_matrix(store, source="user-kb")
         packet = paper_packet(store, source="user-kb")
+        cross_tabs = research_cross_tabs(store, source="user-kb")
     assert matrix[0]["name"] == "Test mechanism"
     assert matrix[0]["case_count"] == 1
     assert packet["data_dictionary"]
+    assert cross_tabs["linked_records"] == 1

@@ -137,6 +137,10 @@ def mechanism_research_matrix(store: MemoryStore, *, source: str | None = None) 
             "verified_evidence_count": sum(row["verified_evidence_count"] for row in linked_rows),
             "relations": dict(sorted(relation_counts.items())),
             "outcomes": dict(sorted(outcomes.items())),
+            "targets": _counts([row["target"] for row in linked_rows]),
+            "carriers": _counts([row["carrier"] for row in linked_rows]),
+            "languages": _counts([row["language"] for row in linked_rows]),
+            "statuses": _counts([row["status"] for row in linked_rows]),
             "applicability_signals": card["applicability_signals"],
             "negative_signals": card["negative_signals"],
             "preconditions": card["preconditions"],
@@ -165,11 +169,57 @@ def mechanism_research_matrix(store: MemoryStore, *, source: str | None = None) 
             "verified_evidence_count": sum(row["verified_evidence_count"] for row in grouped),
             "relations": {},
             "outcomes": dict(sorted(Counter(outcome for row in grouped for outcome in row["attempt_outcomes"]).items())),
+            "targets": _counts([row["target"] for row in grouped]),
+            "carriers": _counts([row["carrier"] for row in grouped]),
+            "languages": _counts([row["language"] for row in grouped]),
+            "statuses": _counts([row["status"] for row in grouped]),
             "applicability_signals": [],
             "negative_signals": [],
             "preconditions": [],
         })
     return sorted(matrix, key=lambda item: (-item["case_count"], item["category"], item["name"]))
+
+
+def _cross_tab(records: list[dict[str, str]], left: str, right: str) -> dict[str, Any]:
+    """Compact deterministic contingency table for the dashboard and CSV-like export."""
+    columns = sorted({record[right] for record in records})
+    grouped: dict[str, Counter[str]] = defaultdict(Counter)
+    for record in records:
+        grouped[record[left]][record[right]] += 1
+    rows = [
+        {"label": label, "total": sum(counts.values()), "values": {column: counts[column] for column in columns}}
+        for label, counts in sorted(grouped.items(), key=lambda item: (-sum(item[1].values()), item[0]))
+    ]
+    return {"columns": columns, "rows": rows}
+
+
+def research_cross_tabs(store: MemoryStore, *, source: str | None = None) -> dict[str, Any]:
+    """Return paper-ready cross-tabulations over mechanism-linked cases.
+
+    A Case can be linked to multiple mechanisms, so these are coverage tables,
+    not mutually exclusive population totals. The API states that explicitly so
+    downstream paper writing does not treat rows as independent samples.
+    """
+    rows_by_case = {row["case_id"]: row for row in case_rows(store, source=source)}
+    cards = {card["mechanism_id"]: card for card in store.list_mechanism_cards()}
+    records: list[dict[str, str]] = []
+    for link in store.list_mechanism_case_links():
+        row = rows_by_case.get(link["case_id"])
+        card = cards.get(link["mechanism_id"])
+        if row is None or card is None:
+            continue
+        base = {"mechanism": card["name"], "target": row["target"], "carrier": row["carrier"], "language": row["language"], "status": row["status"], "relation": link["relation"]}
+        records.append(base)
+    return {
+        "note": "同一 Case 可关联多个机制；各机制行用于覆盖和比较，不应直接相加为独立样本总数。",
+        "linked_records": len(records),
+        "mechanism_by_status": _cross_tab(records, "mechanism", "status"),
+        "mechanism_by_target": _cross_tab(records, "mechanism", "target"),
+        "mechanism_by_carrier": _cross_tab(records, "mechanism", "carrier"),
+        "mechanism_by_language": _cross_tab(records, "mechanism", "language"),
+        "mechanism_by_relation": _cross_tab(records, "mechanism", "relation"),
+        "target_by_carrier": _cross_tab(records, "target", "carrier"),
+    }
 
 
 def paper_packet(store: MemoryStore, *, source: str | None = None) -> dict[str, Any]:
@@ -181,6 +231,7 @@ def paper_packet(store: MemoryStore, *, source: str | None = None) -> dict[str, 
     rows = case_rows(store, source=source)
     summary = research_summary(store, source=source)
     matrix = mechanism_research_matrix(store, source=source)
+    cross_tabs = research_cross_tabs(store, source=source)
     total = len(rows)
     populated = {
         "目标模型或系统": sum(row["target"] != "unknown" for row in rows),
@@ -239,6 +290,7 @@ def paper_packet(store: MemoryStore, *, source: str | None = None) -> dict[str, 
     return {
         "summary": summary,
         "mechanism_matrix": matrix,
+        "cross_tabs": cross_tabs,
         "data_dictionary": data_dictionary,
         "readiness": {
             "total_cases": total,

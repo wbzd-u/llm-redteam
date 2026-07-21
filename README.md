@@ -371,6 +371,7 @@ $env:PYTHONPATH = (Get-Location).Path
 
 ```powershell
 python -m redteam_memory mechanism import examples/mechanism-taxonomy.zh-CN.json
+python -m redteam_memory mechanism import examples/mechanism-taxonomy-research-extension.zh-CN.json
 python -m redteam_memory mechanism link --mechanism-id <机制ID> --case-id <案例ID> --relation observed
 ```
 
@@ -381,6 +382,8 @@ python -m redteam_memory research paper-packet --out artifacts\research-paper-pa
 ```
 
 该数据包只导出方法草稿、机制 × 证据表、数据字典和当前数据缺口，不包含原始输入或模型响应。它会明确区分历史观察与有运行时证据的可复现实验结果，不会把案例数自动包装成统计结论。
+
+机制术语与公开研究方向的对应依据位于 [`docs/MECHANISM_LITERATURE.md`](docs/MECHANISM_LITERATURE.md)。
 
 ## 安全边界
 

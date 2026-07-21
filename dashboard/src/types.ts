@@ -72,11 +72,27 @@ export interface MechanismResearchRow {
   applicability_signals: string[];
   negative_signals: string[];
   preconditions: string[];
+  targets: Counts;
+  carriers: Counts;
+  languages: Counts;
+  statuses: Counts;
+}
+
+export interface CrossTab {
+  note: string;
+  linked_records: number;
+  mechanism_by_status: { columns: string[]; rows: Array<{ label: string; total: number; values: Counts }> };
+  mechanism_by_target: { columns: string[]; rows: Array<{ label: string; total: number; values: Counts }> };
+  mechanism_by_carrier: { columns: string[]; rows: Array<{ label: string; total: number; values: Counts }> };
+  mechanism_by_language: { columns: string[]; rows: Array<{ label: string; total: number; values: Counts }> };
+  mechanism_by_relation: { columns: string[]; rows: Array<{ label: string; total: number; values: Counts }> };
+  target_by_carrier: { columns: string[]; rows: Array<{ label: string; total: number; values: Counts }> };
 }
 
 export interface PaperPacket {
   summary: ResearchSummary;
   mechanism_matrix: MechanismResearchRow[];
+  cross_tabs: CrossTab;
   data_dictionary: Array<{ field: string; meaning: string; unit: string }>;
   readiness: {
     total_cases: number;

@@ -7,7 +7,7 @@ from .planner import build_planner_brief, deterministic_draft, validate_plan_pay
 from .analysis_export import case_markdown, write_attempt_csv
 from .llm_provider import OpenAICompatiblePlanner, ProviderError
 from .campaign import create_campaign, load_campaign_inputs, run_campaign
-from .research import paper_packet, research_summary, write_case_csv, write_paper_packet, write_summary_json, write_summary_svg
+from .research import paper_packet, research_cross_tabs, research_summary, write_case_csv, write_paper_packet, write_summary_json, write_summary_svg
 from .web_api import create_app
 from .defense import coverage_matrix, observation_verdict, regression_gate
 from .llm_guard_adapter import LLMGuardAdapter, record_llm_guard_observation
@@ -68,6 +68,7 @@ __all__ = [
     "record_llm_guard_observation",
     "research_summary",
     "paper_packet",
+    "research_cross_tabs",
     "write_paper_packet",
     "recommend_mechanisms",
     "regression_gate",

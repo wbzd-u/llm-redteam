@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .research import case_rows, paper_packet, research_summary
+from .research import case_rows, paper_packet, research_cross_tabs, research_summary
 from .store import MemoryStore
 
 
@@ -71,5 +71,10 @@ def create_app(db_path: str | Path):
     def research_paper_packet(source: str | None = None) -> dict[str, Any]:
         with with_store() as store:
             return paper_packet(store, source=source)
+
+    @app.get("/api/research/cross-tabs")
+    def research_cross_tabulations(source: str | None = None) -> dict[str, Any]:
+        with with_store() as store:
+            return research_cross_tabs(store, source=source)
 
     return app
