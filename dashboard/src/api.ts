@@ -24,5 +24,6 @@ export const api = {
   taskWorkspace: (caseId: string) => get<TaskWorkspace>(`/api/tasks/${encodeURIComponent(caseId)}/workspace`),
   createTask: (payload: unknown) => post<{ case_id: string }>("/api/tasks", payload),
   createTaskDraft: (caseId: string) => post(`/api/tasks/${encodeURIComponent(caseId)}/plan/draft`, {}),
+  approveTaskPlan: (caseId: string, planId: string) => post(`/api/tasks/${encodeURIComponent(caseId)}/plans/${encodeURIComponent(planId)}/approve`, {}),
   addObservation: (caseId: string, payload: unknown) => post(`/api/tasks/${encodeURIComponent(caseId)}/observation`, payload),
 };

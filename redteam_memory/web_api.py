@@ -67,12 +67,23 @@ def create_app(db_path: str | Path):
             bundle = store.get_case(case_id)
             if bundle is None:
                 raise HTTPException(status_code=404, detail="unknown task")
+            plans = bundle.get("plans", [])
+            active_plan = plans[0] if plans else None
             return {
                 "task": bundle,
                 "recommended_mechanisms": recommend_mechanisms(store, case_id, limit=5),
                 "hypothesis_matrix": build_hypothesis_matrix(store, case_id, limit=3),
                 "next_action": recommend_next(bundle).to_dict(),
                 "suggested_plan": deterministic_draft(store, case_id).to_dict() if not bundle.get("plans") else None,
+                "execution_readiness": {
+                    "state": "no_plan" if active_plan is None else str(active_plan.get("status", "draft")),
+                    "ready": bool(active_plan and active_plan.get("status") == "approved"),
+                    "message": "先生成并审核实验草稿。" if active_plan is None else (
+                        "计划已批准；下一步是为每个步骤提供经审核的输入，并选择受预算控制的执行器。"
+                        if active_plan.get("status") == "approved" else "计划仍是草稿；请先人工审核变量、停止条件和成功判据。"
+                    ),
+                    "steps": [{"id": step.get("id"), "objective": step.get("objective"), "variables": step.get("variables", {}), "approval_required": bool(step.get("approval_required"))} for step in (active_plan or {}).get("steps", [])],
+                },
             }
 
     @app.post("/api/tasks")
@@ -107,6 +118,14 @@ def create_app(db_path: str | Path):
             if store.get_case(case_id) is None:
                 raise HTTPException(status_code=404, detail="unknown task")
             return store.save_research_plan(deterministic_draft(store, case_id)).to_dict()
+
+    @app.post("/api/tasks/{case_id}/plans/{plan_id}/approve")
+    def approve_task_plan(case_id: str, plan_id: str) -> dict[str, Any]:
+        with with_store() as store:
+            plan = store.get_research_plan(plan_id)
+            if plan is None or plan.get("case_id") != case_id:
+                raise HTTPException(status_code=404, detail="unknown task plan")
+            return store.set_research_plan_status(plan_id, "approved")
 
     @app.post("/api/tasks/{case_id}/observation")
     def add_task_observation(case_id: str, payload: dict[str, Any]) -> dict[str, Any]:

@@ -133,6 +133,7 @@ export interface TaskWorkspace {
   task: CaseDetail;
   recommended_mechanisms: MechanismRecommendation[];
   hypothesis_matrix: { method: string; hypotheses: ResearchHypothesis[] };
+  execution_readiness: { state: string; ready: boolean; message: string; steps: Array<{ id: string; objective: string; variables: Record<string, string>; approval_required: boolean }> };
   next_action: { action: string; mechanism: string; rationale: string; confidence: string; requires_human_review: boolean; stage: string };
   suggested_plan: { plan_id: string; hypotheses: PlanHypothesis[]; steps: PlanStep[]; notes: string } | null;
 }

@@ -43,6 +43,8 @@ def test_task_workspace_creates_task_draft_and_observation(tmp_path):
     assert workspace.json()["next_action"]["action"] == "run_clean_baseline"
     draft = client.post(f"/api/tasks/{case_id}/plan/draft")
     assert draft.status_code == 200
+    approved = client.post(f"/api/tasks/{case_id}/plans/{draft.json()['plan_id']}/approve")
+    assert approved.json()["status"] == "approved"
     observation = client.post(f"/api/tasks/{case_id}/observation", json={
         "input_text": "baseline", "response_text": "observed response", "mechanism": "baseline",
         "outcome": "unknown", "observed_effect": "no external effect",
