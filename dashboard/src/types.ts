@@ -208,3 +208,5 @@ export interface ReplayCampaignResult {
   campaign: { campaign_id: string; status: string; executed_turns: number; stop_reason: string };
   results: Array<{ step_id: string; response: string; outcome: string }>;
 }
+
+export type CampaignManifest = Record<string, unknown>;

@@ -67,6 +67,10 @@ def test_task_workspace_creates_task_draft_and_observation(tmp_path):
     })
     assert pyrit_profile.status_code == 200
     assert pyrit_profile.json()["profile"]["request_reference"] == "captured locally"
+    inspect_manifest = client.get(f"/api/tasks/{case_id}/campaigns/{campaign.json()['campaign']['campaign_id']}/export/inspect")
+    promptfoo_manifest = client.get(f"/api/tasks/{case_id}/campaigns/{campaign.json()['campaign']['campaign_id']}/export/promptfoo")
+    assert inspect_manifest.json()["task"]["scorer"] is None
+    assert promptfoo_manifest.json()["providers"] == []
     observation = client.post(f"/api/tasks/{case_id}/observation", json={
         "input_text": "baseline", "response_text": "observed response", "mechanism": "baseline",
         "outcome": "unknown", "observed_effect": "no external effect",

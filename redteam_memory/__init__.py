@@ -9,6 +9,7 @@ from .llm_provider import OpenAICompatiblePlanner, ProviderError
 from .campaign import create_campaign, create_reviewed_campaign, load_campaign_inputs, run_campaign, run_saved_replay_campaign
 from .execution_artifacts import compile_execution_artifacts
 from .executor_profiles import normalize_pyrit_profile, pyrit_readiness
+from .campaign_exports import build_campaign_manifest
 from .research import paper_packet, research_cross_tabs, research_summary, write_case_csv, write_paper_packet, write_summary_json, write_summary_svg
 from .web_api import create_app
 from .defense import coverage_matrix, observation_verdict, regression_gate
@@ -53,6 +54,7 @@ __all__ = [
     "compile_execution_artifacts",
     "normalize_pyrit_profile",
     "pyrit_readiness",
+    "build_campaign_manifest",
     "build_planner_brief",
     "deterministic_draft",
     "load_inspect_samples",

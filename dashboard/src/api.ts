@@ -1,4 +1,4 @@
-import type { CaseDetail, CaseRow, CreatedCampaign, ExecutionArtifacts, Overview, PaperPacket, PyRITProfile, PyRITReadiness, ReplayCampaignResult, ResearchSummary, TaskWorkspace } from "./types";
+import type { CampaignManifest, CaseDetail, CaseRow, CreatedCampaign, ExecutionArtifacts, Overview, PaperPacket, PyRITProfile, PyRITReadiness, ReplayCampaignResult, ResearchSummary, TaskWorkspace } from "./types";
 
 const baseUrl = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8787";
 const sourceQuery = (source: string) => source === "all" ? "" : `?source=${encodeURIComponent(source)}`;
@@ -29,5 +29,6 @@ export const api = {
   executionArtifacts: (caseId: string, planId: string) => get<ExecutionArtifacts>(`/api/tasks/${encodeURIComponent(caseId)}/plans/${encodeURIComponent(planId)}/artifacts`),
   createTaskCampaign: (caseId: string, planId: string, payload: unknown) => post<CreatedCampaign>(`/api/tasks/${encodeURIComponent(caseId)}/plans/${encodeURIComponent(planId)}/campaigns`, payload),
   runTaskReplayCampaign: (caseId: string, campaignId: string, responseText: string) => post<ReplayCampaignResult>(`/api/tasks/${encodeURIComponent(caseId)}/campaigns/${encodeURIComponent(campaignId)}/replay`, { response_text: responseText }),
+  campaignManifest: (caseId: string, campaignId: string, format: "inspect" | "promptfoo") => get<CampaignManifest>(`/api/tasks/${encodeURIComponent(caseId)}/campaigns/${encodeURIComponent(campaignId)}/export/${format}`),
   addObservation: (caseId: string, payload: unknown) => post(`/api/tasks/${encodeURIComponent(caseId)}/observation`, payload),
 };
